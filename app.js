@@ -238,6 +238,7 @@ $("recurringForm").addEventListener("submit",saveRecurring);
 $("addBudget").addEventListener("click",()=>openBudget());$("closeBudget").addEventListener("click",()=>$("budgetdlg").close());
 $("budgetForm").addEventListener("submit",saveBudget);
 $("closereport").addEventListener("click",()=>$("reportdlg").close());
+$("openReport").addEventListener("click",showReport);
 $("export").addEventListener("click",exportBackup);
 $("import").addEventListener("change",e=>{if(e.target.files[0])importBackup(e.target.files[0]);e.target.value=""});
 document.querySelectorAll("[data-target]").forEach(button=>button.addEventListener("click",()=>{
