@@ -179,7 +179,7 @@ async function importBackup(file){
   const data=JSON.parse(await file.text());if(!Array.isArray(data.transactions))throw new Error("Formato inválido");
   const clean=data.transactions.map(x=>{
    if(!["expense","income"].includes(x.kind)||!x.description||!x.date||!(Number(x.amount)>0))throw new Error("Registro inválido");
-   return {kind:x.kind,description:String(x.description).slice(0,70),amount:Number(x.amount),date:x.date,dueDate:x.dueDate||"",status:x.kind==="expense"&&x.status==="pending"?"pending":"paid",category:String(x.category||"Outros"),classification:x.kind==="expense"&&x.classification==="fixed"?"fixed":x.kind==="expense"?"variable":"income",payment:String(x.payment||"Outro"),note:String(x.note||""),createdAt:x.createdAt||new Date().toISOString()};
+   return {kind:x.kind,description:String(x.description).slice(0,70),amount:Number(x.amount),date:x.date,dueDate:x.dueDate||"",status:x.kind==="expense"&&x.status==="pending"?"pending":"paid",category:String(x.category||"Outros"),classification:x.kind==="expense"&&x.classification==="fixed"?"fixed":x.kind==="expense"?"variable":"income",payment:String(x.payment||"Outro"),note:String(x.note||""),recurringId:x.recurringId||null,createdAt:x.createdAt||new Date().toISOString()};
   });
   if(!confirm("Importar "+clean.length+" lançamentos? Isso substituirá todos os lançamentos atuais. Os limites e modelos recorrentes não serão alterados."))return;
   const tx=db.transaction("items","readwrite"),store=tx.objectStore("items");store.clear();clean.forEach(x=>store.add(x));
