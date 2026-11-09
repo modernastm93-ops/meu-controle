@@ -1,3 +1,136 @@
 <!doctype html>
-<!-- Meu Controle PWA v1.0 -->
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b1220"><title>Meu Controle</title><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.svg"><link rel="stylesheet" href="styles.css"></head><body><div class="app"><header><div class="logo">M</div><div><b>Meu Controle</b><small>FINANÇAS PESSOAIS</small></div><button id="install" hidden>⇩</button></header><main><div class="month"><div><small>VISÃO GERAL</small><h1 id="monthName">Este mês</h1></div><input id="month" type="month"></div><section class="hero"><small>TOTAL DE DESPESAS</small><h2 id="expenses">R$ 0,00</h2><div class="twocol"><div><small>Receitas</small><b id="income">R$ 0,00</b></div><div><small>Saldo do mês</small><b id="balance">R$ 0,00</b></div></div></section><div class="tiles"><section><span>↻ Gastos fixos</span><b id="fixed">R$ 0,00</b></section><section><span>⌁ Gastos variáveis</span><b id="variable">R$ 0,00</b></section></div><section class="panel"><small>ACOMPANHAMENTO</small><h3>Despesas por categoria</h3><div id="chart" class="muted">Seus gastos aparecerão aqui.</div></section><section class="panel"><div class="heading"><div><small>MOVIMENTAÇÕES</small><h3>Últimos lançamentos</h3></div><button class="link" id="all">Ver todos</button></div><div id="list" class="muted">Nenhum lançamento neste mês.</div></section><section class="panel"><small>SEUS DADOS</small><h3>Backup e segurança</h3><p class="muted">Os registros ficam neste dispositivo. Exporte backups regularmente.</p><div class="actions"><button id="export">Exportar backup</button><label class="fakebutton">Importar backup<input id="import" type="file" accept=".json,application/json"></label></div><p id="status" class="muted"></p></section></main><nav><button class="active" data-tab="home">⌂<small>Início</small></button><button data-tab="all">▤<small>Lançamentos</small></button><button class="add" id="add">＋</button><button data-tab="report">◔<small>Relatórios</small></button><button data-tab="data">⚙<small>Dados</small></button></nav></div><dialog id="formdlg"><form id="form"><div class="dlghead"><div><small>NOVO REGISTRO</small><h2>Adicionar lançamento</h2></div><button type="button" class="x" id="close">×</button></div><div class="switch"><label><input type="radio" name="kind" value="expense" checked>Despesa</label><label><input type="radio" name="kind" value="income">Receita</label></div><label>Descrição<input name="desc" required maxlength="70" placeholder="Ex.: supermercado"></label><div class="row"><label>Valor (R$)<input name="amount" type="number" min=".01" step=".01" required placeholder="0,00"></label><label>Data<input name="date" type="date" required></label></div><label>Categoria<select name="category" id="category"></select></label><div id="classwrap"><label>Classificação<select name="classification"><option value="variable">Variável</option><option value="fixed">Fixo</option></select></label></div><label>Pagamento<select name="payment"><option>Pix</option><option>Dinheiro</option><option>Débito</option><option>Crédito</option><option>Transferência</option><option>Boleto</option><option>Outro</option></select></label><label>Observação<input name="note" maxlength="140" placeholder="Opcional"></label><button class="primary" type="submit">Salvar lançamento</button></form></dialog><dialog id="listdlg"><div class="dlghead"><div><small>HISTÓRICO</small><h2>Lançamentos</h2></div><button class="x" id="closeall">×</button></div><div class="row"><input id="filtermonth" type="month"><select id="filtertype"><option value="all">Todos</option><option value="expense">Despesas</option><option value="income">Receitas</option></select></div><div id="alllist"></div></dialog><dialog id="reportdlg"><div class="dlghead"><div><small>ANÁLISE</small><h2>Relatório mensal</h2></div><button class="x" id="closereport">×</button></div><div id="report"></div></dialog><div id="toast"></div><script src="app.js"></script></body></html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="description" content="Controle financeiro pessoal e familiar.">
+<title>Meu Controle</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="locked">
+<div class="app" id="appRoot">
+<header>
+  <div class="logo">M</div>
+  <div class="brand-title"><b>Meu Controle</b><small>FINANÇAS PESSOAIS</small></div>
+  <button id="lockBtn" class="lock-button" type="button" title="Bloquear aplicativo">♙ Bloquear</button>
+  <button id="install" hidden type="button">⇩</button>
+</header>
+<main>
+  <div class="month"><div><small>VISÃO GERAL</small><h1 id="monthName">Este mês</h1></div><input id="month" type="month" aria-label="Selecionar mês"></div>
+  <section class="hero">
+    <small>TOTAL DE DESPESAS</small><h2 id="expenses">R$ 0,00</h2>
+    <div class="twocol"><div><small>Receitas</small><b id="income">R$ 0,00</b></div><div><small>Saldo do mês</small><b id="balance">R$ 0,00</b></div></div>
+  </section>
+  <div class="tiles"><section><span>↻ Gastos fixos</span><b id="fixed">R$ 0,00</b></section><section><span>⌁ Gastos variáveis</span><b id="variable">R$ 0,00</b></section></div>
+
+  <section class="panel" id="billsPanel">
+    <div class="heading"><div><small>ORGANIZAÇÃO</small><h3>Contas a pagar</h3></div><span class="counter" id="pendingCount">0 pendentes</span></div>
+    <div id="billsList" class="muted">Nenhuma conta pendente.</div>
+  </section>
+
+  <section class="panel" id="budgetPanel">
+    <div class="heading"><div><small>PLANEJAMENTO</small><h3>Orçamento por categoria</h3></div><button class="link" id="addBudget">+ Definir limite</button></div>
+    <div id="budgetList" class="muted">Defina limites para acompanhar seus gastos.</div>
+  </section>
+
+  <section class="panel" id="recurringPanel">
+    <div class="heading"><div><small>AUTOMAÇÃO</small><h3>Despesas recorrentes</h3></div><button class="link" id="addRecurring">+ Nova recorrência</button></div>
+    <div id="recurringList" class="muted">Cadastre contas mensais para gerar lançamentos automaticamente.</div>
+  </section>
+
+  <section class="panel" id="chartPanel">
+    <small>ACOMPANHAMENTO</small><h3>Despesas por categoria</h3><div id="chart" class="muted">Seus gastos aparecerão aqui.</div>
+  </section>
+
+  <section class="panel" id="transactionsPanel">
+    <div class="heading"><div><small>MOVIMENTAÇÕES</small><h3>Últimos lançamentos</h3></div><button class="link" id="all">Ver todos</button></div>
+    <div id="list" class="muted">Nenhum lançamento neste mês.</div>
+  </section>
+
+  <section class="panel" id="dataPanel">
+    <small>SEUS DADOS</small><h3>Backup e segurança</h3>
+    <p class="muted">Os registros ficam neste dispositivo. Exporte backups regularmente. O backup atual inclui os lançamentos; limites e modelos recorrentes ainda não são exportados.</p>
+    <div class="actions"><button id="export">Exportar backup</button><label class="fakebutton">Importar backup<input id="import" type="file" accept=".json,application/json"></label></div>
+    <p id="status" class="muted"></p>
+  </section>
+</main>
+<nav aria-label="Navegação">
+  <button class="active" data-target="homePanel">⌂<small>Início</small></button>
+  <button data-target="billsPanel">▤<small>Contas</small></button>
+  <button class="add" id="add" aria-label="Adicionar lançamento">＋</button>
+  <button data-target="budgetPanel">◫<small>Orçamento</small></button>
+  <button data-target="chartPanel">◔<small>Gastos</small></button>
+</nav>
+</div>
+
+<div id="authOverlay" class="auth-overlay">
+  <form id="authForm" class="auth-card">
+    <div class="auth-logo">M</div><small class="eyebrow">ACESSO PROTEGIDO</small>
+    <h1 id="authTitle">Criar acesso</h1>
+    <p id="authMessage">Defina seu nome e uma senha para proteger a abertura do aplicativo neste dispositivo.</p>
+    <label id="nameWrap">Seu nome<input id="profileName" name="profileName" autocomplete="name" maxlength="40" placeholder="Como devemos chamar você?"></label>
+    <label>Senha<input id="password" name="password" type="password" autocomplete="current-password" minlength="8" required placeholder="Mínimo de 8 caracteres"></label>
+    <label id="confirmWrap">Confirmar senha<input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" placeholder="Digite a senha novamente"></label>
+    <p id="authError" class="auth-error" role="alert"></p>
+    <button type="submit" class="primary">Continuar</button>
+    <small class="auth-footnote">A senha é guardada como hash neste navegador. Não há recuperação automática; mantenha seus dados e dispositivo protegidos.</small>
+  </form>
+</div>
+
+<dialog id="formdlg">
+<form id="form">
+  <div class="dlghead"><div><small>NOVO REGISTRO</small><h2>Adicionar lançamento</h2></div><button type="button" class="x" id="close">×</button></div>
+  <div class="switch"><label><input type="radio" name="kind" value="expense" checked>Despesa</label><label><input type="radio" name="kind" value="income">Receita</label></div>
+  <label>Descrição<input name="desc" required maxlength="70" placeholder="Ex.: supermercado"></label>
+  <div class="row"><label>Valor (R$)<input name="amount" type="number" min=".01" step=".01" required placeholder="0,00"></label><label>Data<input name="date" type="date" required></label></div>
+  <label>Categoria<select name="category" id="category"></select></label>
+  <div id="expenseFields">
+    <label>Classificação<select name="classification"><option value="variable">Variável</option><option value="fixed">Fixo</option></select></label>
+    <div class="row"><label>Vencimento (opcional)<input name="dueDate" type="date"></label><label>Status<select name="status"><option value="paid">Pago</option><option value="pending">Pendente</option></select></label></div>
+  </div>
+  <label>Pagamento<select name="payment"><option>Pix</option><option>Dinheiro</option><option>Débito</option><option>Crédito</option><option>Transferência</option><option>Boleto</option><option>Outro</option></select></label>
+  <label>Observação<input name="note" maxlength="140" placeholder="Opcional"></label>
+  <button class="primary" type="submit">Salvar lançamento</button>
+</form>
+</dialog>
+
+<dialog id="listdlg">
+<div class="dlghead"><div><small>HISTÓRICO</small><h2>Lançamentos</h2></div><button class="x" id="closeall">×</button></div>
+<div class="row"><input id="filtermonth" type="month"><select id="filtertype"><option value="all">Todos</option><option value="expense">Despesas</option><option value="income">Receitas</option></select></div>
+<div id="alllist"></div>
+</dialog>
+
+<dialog id="recurringdlg">
+<form id="recurringForm">
+<div class="dlghead"><div><small>CONTA MENSAL</small><h2>Nova despesa recorrente</h2></div><button type="button" class="x" id="closeRecurring">×</button></div>
+<label>Descrição<input name="desc" required maxlength="70" placeholder="Ex.: Internet"></label>
+<div class="row"><label>Valor (R$)<input name="amount" type="number" min=".01" step=".01" required></label><label>Dia do vencimento<input name="dueDay" type="number" min="1" max="28" value="10" required></label></div>
+<label>Categoria<select name="category" id="recurringCategory"></select></label>
+<label>Classificação<select name="classification"><option value="fixed">Fixo</option><option value="variable">Variável</option></select></label>
+<label>Pagamento previsto<select name="payment"><option>Boleto</option><option>Pix</option><option>Débito</option><option>Crédito</option><option>Transferência</option><option>Dinheiro</option><option>Outro</option></select></label>
+<p class="muted">A despesa será criada uma vez por mês como pendente. Você poderá marcar cada ocorrência como paga.</p>
+<button type="submit" class="primary">Salvar recorrência</button>
+</form>
+</dialog>
+
+<dialog id="budgetdlg">
+<form id="budgetForm">
+<div class="dlghead"><div><small>PLANEJAMENTO</small><h2>Definir orçamento</h2></div><button type="button" class="x" id="closeBudget">×</button></div>
+<label>Categoria<select name="category" id="budgetCategory"></select></label>
+<label>Limite do mês (R$)<input name="amount" type="number" min=".01" step=".01" required placeholder="Ex.: 800,00"></label>
+<p class="muted">O limite é aplicado ao mês selecionado no painel.</p>
+<button type="submit" class="primary">Salvar limite</button>
+</form>
+</dialog>
+
+<dialog id="reportdlg">
+<div class="dlghead"><div><small>ANÁLISE</small><h2>Comparativo mensal</h2></div><button class="x" id="closereport">×</button></div>
+<div id="report"></div>
+</dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>
