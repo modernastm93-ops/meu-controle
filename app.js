@@ -21,7 +21,7 @@ function openDB(){
    if(!d.objectStoreNames.contains("settings"))d.createObjectStore("settings",{keyPath:"key"});
    if(!d.objectStoreNames.contains("goals"))d.createObjectStore("goals",{keyPath:"id",autoIncrement:true});
   };
-  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+  req.onsuccess=()=>{req.result.onversionchange=()=>req.result.close();resolve(req.result)};req.onerror=()=>reject(req.error);
  });
 }
 function getAll(store){
