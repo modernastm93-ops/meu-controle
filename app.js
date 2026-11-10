@@ -117,8 +117,8 @@ function renderChart(xs){
  const entries=Object.entries(sumsByCategory).sort((a,b)=>b[1]-a[1]),total=entries.reduce((a,x)=>a+x[1],0);
  $("chart").innerHTML=entries.length?entries.slice(0,7).map(([name,value])=>'<div class="barrow"><div class="barlabel"><span>'+safe(name)+'</span><span>'+money(value)+' · '+(total?(value/total*100).toFixed(0):0)+'%</span></div><div class="track"><div class="fill" style="width:'+(total?value/total*100:0)+'%"></div></div></div>').join(""):'<p class="muted">Seus gastos aparecerão aqui.</p>';
 }
-function renderBills(xs){
- const pending=xs.filter(x=>x.kind==="expense"&&x.status==="pending").sort((a,b)=>(a.dueDate||a.date).localeCompare(b.dueDate||b.date));
+function renderBills(){
+ const pending=items.filter(x=>x.kind==="expense"&&x.status==="pending").sort((a,b)=>(a.dueDate||a.date).localeCompare(b.dueDate||b.date));
  $("pendingCount").textContent=pending.length+(pending.length===1?" pendente":" pendentes");
  if(!pending.length){$("billsList").innerHTML='<p class="muted">Nenhuma conta pendente neste mês. Tudo em dia!</p>';return}
  $("billsList").innerHTML=pending.map(x=>{
@@ -380,6 +380,11 @@ function generateFinancialAlerts(){
    "Ainda faltam "+money(remaining)+" para alcançar esta meta. Atualize o prazo ou ajuste o objetivo.",
    "goals","Revisar meta");
  });
+ if(!alerts.length&&items.length===0){
+  add("info","Comece registrando suas movimentações",
+   "Assim que você cadastrar receitas, despesas e vencimentos, o aplicativo poderá identificar riscos e oportunidades no seu controle financeiro.",
+   "transactions","Fazer primeiro lançamento");
+ }
  if(!alerts.length){
   add("ok","Tudo em ordem por enquanto",
    "Não encontramos contas vencidas, orçamentos próximos do limite ou aumentos relevantes nos registros analisados. Continue mantendo seus dados atualizados.",
@@ -418,7 +423,7 @@ async function render(){
  $("monthName").textContent=new Date(parts[0],parts[1]-1,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
  $("expenses").textContent=money(s.expenses);$("income").textContent=money(s.income);$("balance").textContent=money(s.income-s.expenses);
  $("fixed").textContent=money(s.fixed);$("variable").textContent=money(s.variable);
- renderAvailable(s);renderBills(xs);renderBudgets(xs);renderRecurring();renderGoals();renderSuggestions();renderChart(xs);renderFavorites();renderCustomCategories();renderAlertCenter();
+ renderAvailable(s);renderBills();renderBudgets(xs);renderRecurring();renderGoals();renderSuggestions();renderChart(xs);renderFavorites();renderCustomCategories();renderAlertCenter();
  renderTransactions(xs.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5),"list");
 }
 function renderAll(){
