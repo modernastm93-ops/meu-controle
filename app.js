@@ -316,7 +316,7 @@ function lockApp(){document.body.classList.add("locked");$("authOverlay").hidden
 
 $("authForm").addEventListener("submit",submitAuth);
 $("lockBtn").addEventListener("click",lockApp);
-$("add").addEventListener("click",openTransactionForm);
+$("add").addEventListener("click",()=>{closeMenu();openTransactionForm()});
 $("close").addEventListener("click",()=>$("formdlg").close());
 $("form").addEventListener("submit",addTransaction);
 document.querySelectorAll('input[name="kind"]').forEach(r=>r.addEventListener("change",e=>setupCategories(e.target.value)));
@@ -339,11 +339,40 @@ $("closereport").addEventListener("click",()=>$("reportdlg").close());
 $("openReport").addEventListener("click",showReport);
 $("export").addEventListener("click",exportBackup);
 $("import").addEventListener("change",e=>{if(e.target.files[0])importBackup(e.target.files[0]);e.target.value=""});
-document.querySelectorAll("[data-target]").forEach(button=>button.addEventListener("click",()=>{
- document.querySelectorAll("[data-target]").forEach(b=>b.classList.remove("active"));button.classList.add("active");
- if(button.dataset.target==="homePanel")window.scrollTo({top:0,behavior:"smooth"});
- else $(button.dataset.target).scrollIntoView({behavior:"smooth",block:"start"});
-}));
+const VIEW_LABELS={dashboard:"DASHBOARD",transactions:"LANÇAMENTOS",bills:"CONTAS A PAGAR",budget:"ORÇAMENTO",goals:"METAS FINANCEIRAS",recurring:"DESPESAS RECORRENTES",suggestions:"SUGESTÕES",data:"BACKUP E SEGURANÇA"};
+function openMenu(){
+ const overlay=$("menuOverlay");
+ overlay.hidden=false;
+ requestAnimationFrame(()=>overlay.classList.add("open"));
+ document.body.classList.add("menu-open");
+ $("menuToggle").setAttribute("aria-expanded","true");
+}
+function closeMenu(){
+ const overlay=$("menuOverlay");
+ overlay.classList.remove("open");
+ document.body.classList.remove("menu-open");
+ $("menuToggle").setAttribute("aria-expanded","false");
+ window.setTimeout(()=>{overlay.hidden=true},180);
+}
+function switchView(name){
+ const view=$("view-"+name);
+ if(!view)return;
+ document.querySelectorAll(".page-view").forEach(x=>x.classList.remove("active"));
+ view.classList.add("active");
+ document.querySelectorAll("[data-menu-view]").forEach(b=>b.classList.toggle("active",b.dataset.menuView===name));
+ $("currentViewLabel").textContent=VIEW_LABELS[name]||"MEU CONTROLE";
+ closeMenu();
+ window.scrollTo({top:0,behavior:"smooth"});
+}
+$("menuToggle").addEventListener("click",openMenu);
+$("menuClose").addEventListener("click",closeMenu);
+$("menuOverlay").addEventListener("click",e=>{if(e.target===$("menuOverlay"))closeMenu()});
+document.querySelectorAll("[data-menu-view]").forEach(button=>button.addEventListener("click",()=>switchView(button.dataset.menuView)));
+document.querySelector('[data-menu-action="reports"]').addEventListener("click",()=>{
+ document.querySelectorAll("[data-menu-view]").forEach(b=>b.classList.remove("active"));
+ closeMenu();showReport();
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("menuOverlay").hidden)closeMenu()});
 document.addEventListener("click",async e=>{
  const goalAdd=e.target.closest("[data-goal-add]");if(goalAdd){openGoalContribution(goalAdd.dataset.goalAdd);return}
  const goalDelete=e.target.closest("[data-goal-delete]");if(goalDelete&&confirm("Excluir esta meta? O histórico de contribuições dela também será removido.")){await deleteRecord("goals",goalDelete.dataset.goalDelete);goals=await getAll("goals");await render();toast("Meta excluída.");return}
