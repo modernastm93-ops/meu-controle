@@ -479,7 +479,7 @@ async function renderClosing(){
   comparisonHtml+='<p class="muted">Não há registros de despesas no período anterior para calcular uma variação confiável. '+safe(comparison.periodLabel)+'.</p>';
  }else{
   const up=comparison.delta>0;
-  comparisonHtml+='<div class="closing-change '+(up?"negative":"positive")+'">'+(up?"Aumento de ":"Redução de ")+money(Math.abs(comparison.delta))+" ("+Math.abs(comparison.percent).toFixed(1)+"%)</div><p class="muted">"+safe(comparison.periodLabel)+".</p>";
+  comparisonHtml+='<div class="closing-change '+(up?"negative":"positive")+'">'+(up?"Aumento de ":"Redução de ")+money(Math.abs(comparison.delta))+' ('+Math.abs(comparison.percent).toFixed(1)+'%)</div><p class="muted">'+safe(comparison.periodLabel)+'.</p>';
  }
  $("closingComparison").innerHTML=comparisonHtml;
 
