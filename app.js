@@ -568,6 +568,7 @@ async function render(){
  $("fixed").textContent=money(s.fixed);$("variable").textContent=money(s.variable);
  renderAvailable(s);renderBills();renderBudgets(xs);renderRecurring();renderGoals();renderSuggestions();renderChart(xs);renderFavorites();renderCustomCategories();renderAlertCenter();
  renderTransactions(xs.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5),"list");
+ if($("view-closing")?.classList.contains("active"))await renderClosing();
 }
 function renderAll(){
  const mm=$("filtermonth").value||month,kind=$("filtertype").value,term=$("searchTransactions").value.trim().toLocaleLowerCase("pt-BR");
