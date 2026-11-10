@@ -118,6 +118,60 @@
     <p class="muted">Os alertas usam suas contas, lançamentos, orçamentos e metas cadastrados neste dispositivo. Eles são atualizados quando você abre ou atualiza o aplicativo. Não são notificações bancárias e não acessam suas contas.</p>
   </section>
 </section>
+  <section class="page-view" id="view-closing" aria-labelledby="title-closing">
+  <div class="page-heading"><div><small>RESUMO E PRESTAÇÃO DE CONTAS</small><h1 id="title-closing">Fechamento mensal</h1></div></div>
+  <section class="panel closing-controls">
+    <div class="closing-period">
+      <label for="closingMonth">Mês de referência<input id="closingMonth" type="month"></label>
+      <span id="closingStatus" class="closing-status open">MÊS EM ABERTO</span>
+    </div>
+    <p id="closingStatusMessage" class="muted">Revise os números e conclua o fechamento quando estiver tudo conferido.</p>
+    <div class="closing-actions">
+      <button id="completeClosing" class="primary" type="button">Concluir fechamento</button>
+      <button id="refreshClosing" class="secondary" type="button" hidden>Atualizar fechamento</button>
+      <button id="reopenClosing" class="secondary" type="button" hidden>Reabrir</button>
+      <button id="printClosing" class="secondary" type="button">Imprimir / Salvar PDF</button>
+    </div>
+  </section>
+  <div id="closingReport" class="closing-report">
+    <section class="closing-highlight-grid">
+      <article class="closing-highlight income-highlight"><small>RECEITAS</small><b id="closingIncome">R$ 0,00</b></article>
+      <article class="closing-highlight expense-highlight"><small>DESPESAS</small><b id="closingExpenses">R$ 0,00</b></article>
+      <article class="closing-highlight balance-highlight"><small>RESULTADO DO MÊS</small><b id="closingBalance">R$ 0,00</b><small id="closingSavingsRate">Sem receitas registradas</small></article>
+    </section>
+    <section class="closing-stat-grid">
+      <article><small>Despesas fixas</small><b id="closingFixed">R$ 0,00</b></article>
+      <article><small>Despesas variáveis</small><b id="closingVariable">R$ 0,00</b></article>
+      <article><small>Despesas pagas</small><b id="closingPaid">R$ 0,00</b></article>
+      <article><small>Contas pendentes</small><b id="closingPending">R$ 0,00</b></article>
+    </section>
+    <section class="panel">
+      <div class="heading"><div><small>EVOLUÇÃO</small><h3>Comparação com o mês anterior</h3></div></div>
+      <div id="closingComparison" class="closing-comparison"></div>
+    </section>
+    <section class="panel">
+      <div class="heading"><div><small>PARA ONDE FOI O DINHEIRO</small><h3>Despesas por categoria</h3></div></div>
+      <div id="closingCategories" class="closing-categories"></div>
+    </section>
+    <section class="panel">
+      <div class="heading"><div><small>PLANEJAMENTO</small><h3>Orçamentos do mês</h3></div></div>
+      <div id="closingBudgets" class="closing-list"></div>
+    </section>
+    <section class="panel">
+      <div class="heading"><div><small>OBJETIVOS</small><h3>Contribuições para metas</h3></div></div>
+      <div id="closingGoals" class="closing-list"></div>
+    </section>
+    <section class="panel">
+      <div class="heading"><div><small>PENDÊNCIAS</small><h3>Contas que ainda precisam de atenção</h3></div></div>
+      <div id="closingBills" class="closing-list"></div>
+    </section>
+    <section class="panel closing-checklist-panel">
+      <div class="heading"><div><small>CONFERÊNCIA FINAL</small><h3>Checklist do fechamento</h3></div></div>
+      <div id="closingChecklist" class="closing-checklist"></div>
+    </section>
+    <p class="closing-footnote">Relatório calculado com os dados cadastrados neste dispositivo. O fechamento salva um resumo local, não bloqueia alterações posteriores e não substitui a conferência dos extratos bancários.</p>
+  </div>
+</section>
   <section class="page-view" id="view-suggestions" aria-labelledby="title-suggestions">
   <div class="page-heading"><div><small>ANÁLISE DO HISTÓRICO</small><h1 id="title-suggestions">Sugestões para você</h1></div></div>
   <section class="panel" id="suggestionsPanel">
@@ -153,6 +207,7 @@
     <button class="menu-link" type="button" data-menu-view="recurring"><span class="menu-icon">↻</span><span>Despesas recorrentes</span></button>
     <div class="drawer-section-label">ANÁLISE</div>
     <button class="menu-link" type="button" data-menu-view="alerts"><span class="menu-icon">♢</span><span>Alertas financeiros</span><span class="alert-menu-count" id="alertMenuCount" hidden>0</span></button>
+    <button class="menu-link" type="button" data-menu-view="closing"><span class="menu-icon">▧</span><span>Fechamento mensal</span></button>
     <button class="menu-link" type="button" data-menu-view="suggestions"><span class="menu-icon">✦</span><span>Sugestões</span></button>
     <button class="menu-link" type="button" data-menu-action="reports"><span class="menu-icon">▥</span><span>Relatórios</span></button>
     <div class="drawer-section-label">APLICATIVO</div>
