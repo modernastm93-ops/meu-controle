@@ -50,3 +50,11 @@ https://modernastm93-ops.github.io/meu-controle/
 - Checklist de conferência antes de concluir o mês.
 - Fechamentos concluídos ficam registrados no IndexedDB local. Se os lançamentos ou dados relacionados mudarem depois, o aplicativo sinaliza que o resumo está desatualizado e permite atualizá-lo ou reabri-lo.
 - O fechamento não bloqueia novos registros. A impressão do relatório pode ser salva em PDF pelo navegador.
+
+## Identidade visual v2.0
+- Revisão da paleta escura com superfícies, bordas, contraste e hierarquia tipográfica unificados.
+- Dashboard reorganizado em duas colunas em telas maiores e fluxo vertical em celulares.
+- Refinamento do cabeçalho, menu lateral, cartões, formulários, botões, estados e espaçamentos.
+- Descrições curtas nas telas internas para orientar a navegação.
+- Ajustes de acessibilidade para foco de teclado e preferência por movimento reduzido.
+- Relatório mensal com estilos próprios para impressão e salvamento em PDF.
