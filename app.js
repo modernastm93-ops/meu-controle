@@ -11,7 +11,7 @@ const today=()=>{
  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 };
 const thisMonth=()=>today().slice(0,7);
-let db,items=[],recurrings=[],budgets=[],goals=[],customCategories={expense:[],income:[]},favorites=[],month=thisMonth(),installPrompt=null,firstAccess=false;
+let db,items=[],recurrings=[],budgets=[],goals=[],customCategories={expense:[],income:[]},favorites=[],monthlyClosures=[],month=thisMonth(),installPrompt=null,firstAccess=false;
 
 function openDB(){
  return new Promise((resolve,reject)=>{
@@ -39,7 +39,7 @@ function deleteRecord(store,id){
 function getSetting(key){
  return new Promise((resolve,reject)=>{const r=db.transaction("settings").objectStore("settings").get(key);r.onsuccess=()=>resolve(r.result?.value);r.onerror=()=>reject(r.error)});
 }
-async function refreshData(){items=await getAll("items");recurrings=await getAll("recurring");budgets=await getAll("budgets");goals=await getAll("goals");customCategories=(await getSetting("customCategories"))||{expense:[],income:[]};favorites=(await getSetting("favorites"))||[]}
+async function refreshData(){items=await getAll("items");recurrings=await getAll("recurring");budgets=await getAll("budgets");goals=await getAll("goals");customCategories=(await getSetting("customCategories"))||{expense:[],income:[]};favorites=(await getSetting("favorites"))||[];monthlyClosures=(await getSetting("monthlyClosures"))||[]}
 function safe(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function dateFmt(d){if(!d)return "Sem data";return new Date(d+"T12:00:00").toLocaleDateString("pt-BR")}
 function monthItems(mm=month){return items.filter(x=>x.date&&x.date.slice(0,7)===mm)}
@@ -416,6 +416,149 @@ function renderAlertCenter(){
  $("dashboardAlertCount").classList.toggle("has-alerts",active>0);
 }
 
+
+function monthTitle(mm){
+ const [year,monthNumber]=mm.split("-").map(Number);
+ return new Date(year,monthNumber-1,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+}
+function closingSignature(mm){
+ const rows=items.filter(x=>x.date?.slice(0,7)===mm||(x.kind==="expense"&&x.status==="pending"&&x.dueDate?.slice(0,7)===mm))
+  .map(x=>({id:x.id,kind:x.kind,description:x.description,amount:Number(x.amount||0),date:x.date,dueDate:x.dueDate||"",status:x.status||"",category:x.category||"",classification:x.classification||"",payment:x.payment||""}))
+  .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+ const monthBudgets=budgets.filter(b=>b.month===mm).map(b=>({id:b.id,category:b.category,amount:Number(b.amount||0)})).sort((a,b)=>a.category.localeCompare(b.category,"pt-BR"));
+ const contributions=goals.flatMap(g=>(Array.isArray(g.contributions)?g.contributions:[]).filter(c=>c.date?.slice(0,7)===mm).map(c=>({goalId:g.id,title:g.title,date:c.date,amount:Number(c.amount||0)}))).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+ return JSON.stringify({rows,monthBudgets,contributions});
+}
+function closingPeriodComparison(mm){
+ const previous=previousMonth(mm),isCurrent=mm===thisMonth();
+ let cutoff=null,previousCutoff=null;
+ if(isCurrent){
+  const day=Number(today().slice(8,10));
+  const prevParts=previous.split("-").map(Number);
+  const prevDays=new Date(prevParts[0],prevParts[1],0).getDate();
+  cutoff=mm+"-"+String(day).padStart(2,"0");
+  previousCutoff=previous+"-"+String(Math.min(day,prevDays)).padStart(2,"0");
+ }
+ const currentRows=items.filter(x=>x.kind==="expense"&&x.date?.slice(0,7)===mm&&(!cutoff||x.date<=cutoff));
+ const previousRows=items.filter(x=>x.kind==="expense"&&x.date?.slice(0,7)===previous&&(!previousCutoff||x.date<=previousCutoff));
+ const current=currentRows.reduce((sum,x)=>sum+Number(x.amount||0),0);
+ const before=previousRows.reduce((sum,x)=>sum+Number(x.amount||0),0);
+ return {previous,current,before,delta:current-before,percent:before>0?(current-before)/before*100:null,currentCount:currentRows.length,previousCount:previousRows.length,isCurrent,periodLabel:isCurrent?"comparação até "+dateFmt(cutoff)+" com o mesmo período do mês anterior":"comparação entre meses completos"};
+}
+function closingContributionTotal(mm){
+ return goals.reduce((sum,g)=>sum+(Array.isArray(g.contributions)?g.contributions.filter(c=>c.date?.slice(0,7)===mm).reduce((a,c)=>a+Number(c.amount||0),0):0),0);
+}
+function renderClosingList(target,html,empty){
+ $(target).innerHTML=html||'<p class="muted">'+empty+'</p>';
+}
+async function renderClosing(){
+ const mm=$("closingMonth").value||thisMonth();
+ $("closingMonth").value=mm;
+ const rows=items.filter(x=>x.date?.slice(0,7)===mm);
+ const summary=totals(rows);
+ const expenses=rows.filter(x=>x.kind==="expense");
+ const paid=expenses.filter(x=>x.status!=="pending").reduce((sum,x)=>sum+Number(x.amount||0),0);
+ const pending=items.filter(x=>x.kind==="expense"&&x.status==="pending"&&(x.date?.slice(0,7)===mm||x.dueDate?.slice(0,7)===mm));
+ const pendingTotal=pending.reduce((sum,x)=>sum+Number(x.amount||0),0);
+ const result=summary.income-summary.expenses;
+ const savingsRate=summary.income>0?result/summary.income*100:null;
+ const contributionTotal=closingContributionTotal(mm);
+ $("closingIncome").textContent=money(summary.income);
+ $("closingExpenses").textContent=money(summary.expenses);
+ $("closingBalance").textContent=money(result);
+ $("closingBalance").classList.toggle("negative",result<0);
+ $("closingSavingsRate").textContent=savingsRate===null?"Sem receitas registradas":(savingsRate<0?"Déficit de ": "Sobra de ")+Math.abs(savingsRate).toFixed(1)+"% das receitas";
+ $("closingFixed").textContent=money(summary.fixed);
+ $("closingVariable").textContent=money(summary.variable);
+ $("closingPaid").textContent=money(paid);
+ $("closingPending").textContent=money(pendingTotal)+" ("+pending.length+")";
+
+ const comparison=closingPeriodComparison(mm);
+ let comparisonHtml='<div class="closing-comparison-row"><span>Despesas no mês selecionado</span><b>'+money(comparison.current)+'</b></div><div class="closing-comparison-row"><span>Despesas no mês anterior</span><b>'+money(comparison.before)+'</b></div>';
+ if(comparison.percent===null){
+  comparisonHtml+='<p class="muted">Não há registros de despesas no período anterior para calcular uma variação confiável. '+safe(comparison.periodLabel)+'.</p>';
+ }else{
+  const up=comparison.delta>0;
+  comparisonHtml+='<div class="closing-change '+(up?"negative":"positive")+'">'+(up?"Aumento de ":"Redução de ")+money(Math.abs(comparison.delta))+" ("+Math.abs(comparison.percent).toFixed(1)+"%)</div><p class="muted">"+safe(comparison.periodLabel)+".</p>";
+ }
+ $("closingComparison").innerHTML=comparisonHtml;
+
+ const byCategory={};
+ expenses.forEach(x=>byCategory[x.category||"Sem categoria"]=(byCategory[x.category||"Sem categoria"]||0)+Number(x.amount||0));
+ const categories=Object.entries(byCategory).sort((a,b)=>b[1]-a[1]);
+ const maxCategory=categories[0]?.[1]||0;
+ renderClosingList("closingCategories",categories.slice(0,7).map(([name,value])=>{
+  const pct=summary.expenses>0?value/summary.expenses*100:0;
+  return '<div class="closing-category-row"><div class="closing-category-label"><b>'+safe(name)+'</b><span>'+money(value)+' · '+pct.toFixed(1)+'%</span></div><div class="track"><div class="fill" style="width:'+(maxCategory?value/maxCategory*100:0)+'%"></div></div></div>';
+ }).join(""),"Nenhuma despesa registrada neste mês.");
+
+ const monthBudgets=budgets.filter(b=>b.month===mm).sort((a,b)=>a.category.localeCompare(b.category,"pt-BR"));
+ renderClosingList("closingBudgets",monthBudgets.map(b=>{
+  const spent=expenses.filter(x=>x.category===b.category).reduce((sum,x)=>sum+Number(x.amount||0),0);
+  const pct=Number(b.amount)>0?spent/Number(b.amount)*100:0;
+  const over=pct>100;
+  return '<div class="closing-list-row"><div><b>'+safe(b.category)+'</b><small>'+money(spent)+' de '+money(b.amount)+' · '+pct.toFixed(0)+'% utilizado</small></div><span class="closing-pill '+(over?"over":pct>=85?"near":"ok")+'">'+(over?"Ultrapassado":pct>=85?"Atenção":"Dentro do limite")+'</span></div>';
+ }).join(""),"Nenhum orçamento definido para este mês.");
+
+ const contributionRows=goals.flatMap(g=>(Array.isArray(g.contributions)?g.contributions:[]).filter(c=>c.date?.slice(0,7)===mm).map(c=>({title:g.title,date:c.date,amount:Number(c.amount||0)}))).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+ renderClosingList("closingGoals",contributionRows.map(c=>'<div class="closing-list-row"><div><b>'+safe(c.title)+'</b><small>'+dateFmt(c.date)+'</small></div><strong class="positive">+'+money(c.amount)+'</strong></div>').join(""),"Nenhuma contribuição para metas registrada neste mês.");
+ if(contributionRows.length){
+  $("closingGoals").insertAdjacentHTML("afterbegin",'<div class="closing-goal-total"><span>Total guardado nas metas</span><b>'+money(contributionTotal)+'</b></div>');
+ }
+
+ renderClosingList("closingBills",pending.slice().sort((a,b)=>(a.dueDate||a.date).localeCompare(b.dueDate||b.date)).map(x=>{
+  const due=x.dueDate||x.date,late=due<today();
+  return '<div class="closing-list-row"><div><b>'+safe(x.description)+'</b><small>'+safe(x.category||"Sem categoria")+' · Vencimento '+dateFmt(due)+'</small></div><div class="closing-bill-right"><strong>'+money(x.amount)+'</strong><span class="closing-pill '+(late?"over":"near")+'">'+(late?"Em atraso":"Pendente")+'</span></div></div>';
+ }).join(""),"Nenhuma conta pendente vinculada a este mês.");
+
+ const budgetExceeded=monthBudgets.filter(b=>{
+  const spent=expenses.filter(x=>x.category===b.category).reduce((sum,x)=>sum+Number(x.amount||0),0);
+  return spent>Number(b.amount||0);
+ }).length;
+ const checklist=[
+  {ok:rows.length>0,title:"Movimentações do mês",body:rows.length?rows.length+" lançamento(s) registrado(s).":"Nenhum lançamento encontrado neste mês."},
+  {ok:summary.income>0,title:"Receitas registradas",body:summary.income>0?"Receitas somadas em "+money(summary.income)+".":"Confira se todas as receitas do período foram cadastradas."},
+  {ok:pending.length===0,title:"Contas pendentes conferidas",body:pending.length?pending.length+" conta(s) ainda pendente(s), total de "+money(pendingTotal)+".":"Nenhuma conta pendente encontrada."},
+  {ok:budgetExceeded===0,title:"Orçamentos revisados",body:monthBudgets.length?(budgetExceeded?budgetExceeded+" orçamento(s) ultrapassado(s).":"Todos os limites definidos foram respeitados."):"Nenhum orçamento configurado para o mês."},
+  {ok:true,title:"Metas financeiras",body:contributionRows.length?"Foram guardados "+money(contributionTotal)+" nas metas.":"Nenhuma contribuição para metas neste período."}
+ ];
+ $("closingChecklist").innerHTML=checklist.map(c=>'<div class="closing-check-item"><span class="'+(c.ok?"check-ok":"check-pending")+'">'+(c.ok?"✓":"!")+'</span><div><b>'+safe(c.title)+'</b><small>'+safe(c.body)+'</small></div></div>').join("");
+
+ const signature=closingSignature(mm);
+ const saved=monthlyClosures.find(x=>x.month===mm);
+ const same=saved&&saved.signature===signature;
+ const status=$("closingStatus");
+ status.className="closing-status "+(!saved?"open":same?"closed":"changed");
+ status.textContent=!saved?"MÊS EM ABERTO":same?"FECHAMENTO CONCLUÍDO":"DADOS ALTERADOS";
+ $("closingStatusMessage").textContent=!saved?
+  "Revise os números e conclua o fechamento quando estiver tudo conferido.":
+  same?"Fechamento salvo em "+new Date(saved.closedAt).toLocaleString("pt-BR")+". Este registro está atualizado.":
+  "Há lançamentos, orçamentos ou contribuições alterados depois do fechamento de "+new Date(saved.closedAt).toLocaleDateString("pt-BR")+". Confira o relatório e atualize o fechamento.";
+ $("completeClosing").hidden=!!saved;
+ $("refreshClosing").hidden=!saved||!!same;
+ $("reopenClosing").hidden=!saved;
+ $("closingReport").dataset.month=mm;
+ $("closingReport").dataset.monthTitle=monthTitle(mm);
+}
+async function saveMonthlyClosing(){
+ const mm=$("closingMonth").value||thisMonth();
+ const pending=items.filter(x=>x.kind==="expense"&&x.status==="pending"&&(x.date?.slice(0,7)===mm||x.dueDate?.slice(0,7)===mm));
+ if(pending.length&&!confirm("Existem "+pending.length+" conta(s) pendente(s), no total de "+money(pending.reduce((sum,x)=>sum+Number(x.amount||0),0))+". O fechamento vai registrar essas pendências no relatório. Deseja concluir mesmo assim?"))return;
+ const closing={month:mm,closedAt:new Date().toISOString(),signature:closingSignature(mm)};
+ monthlyClosures=[...monthlyClosures.filter(x=>x.month!==mm),closing].sort((a,b)=>a.month.localeCompare(b.month));
+ await putRecord("settings",{key:"monthlyClosures",value:monthlyClosures});
+ await renderClosing();
+ toast("Fechamento mensal concluído!");
+}
+async function reopenMonthlyClosing(){
+ const mm=$("closingMonth").value||thisMonth();
+ if(!confirm("Reabrir o fechamento de "+monthTitle(mm)+"? O resumo salvo será removido, mas seus lançamentos continuarão intactos."))return;
+ monthlyClosures=monthlyClosures.filter(x=>x.month!==mm);
+ await putRecord("settings",{key:"monthlyClosures",value:monthlyClosures});
+ await renderClosing();
+ toast("Fechamento reaberto.");
+}
+
 async function render(){
  await materializeRecurring(month);
  const xs=monthItems(),s=totals(xs),parts=month.split("-").map(Number);
@@ -587,7 +730,7 @@ $("closereport").addEventListener("click",()=>$("reportdlg").close());
 $("openReport").addEventListener("click",showReport);
 $("export").addEventListener("click",exportBackup);
 $("import").addEventListener("change",e=>{if(e.target.files[0])importBackup(e.target.files[0]);e.target.value=""});
-const VIEW_LABELS={dashboard:"DASHBOARD",transactions:"LANÇAMENTOS",bills:"CONTAS A PAGAR",budget:"ORÇAMENTO",categories:"CATEGORIAS",goals:"METAS FINANCEIRAS",recurring:"DESPESAS RECORRENTES",alerts:"ALERTAS FINANCEIROS",suggestions:"SUGESTÕES",data:"BACKUP E SEGURANÇA"};
+const VIEW_LABELS={dashboard:"DASHBOARD",transactions:"LANÇAMENTOS",bills:"CONTAS A PAGAR",budget:"ORÇAMENTO",categories:"CATEGORIAS",goals:"METAS FINANCEIRAS",recurring:"DESPESAS RECORRENTES",alerts:"ALERTAS FINANCEIROS",closing:"FECHAMENTO MENSAL",suggestions:"SUGESTÕES",data:"BACKUP E SEGURANÇA"};
 function openMenu(){
  const overlay=$("menuOverlay");
  overlay.hidden=false;
@@ -610,9 +753,16 @@ function switchView(name){
  document.querySelectorAll("[data-menu-view]").forEach(b=>b.classList.toggle("active",b.dataset.menuView===name));
  $("currentViewLabel").textContent=VIEW_LABELS[name]||"MEU CONTROLE";
  closeMenu();
+ if(name==="closing")renderClosing();
  window.scrollTo({top:0,behavior:"smooth"});
 }
 $("openAlerts").addEventListener("click",()=>switchView("alerts"));
+$("closingMonth").value=thisMonth();
+$("closingMonth").addEventListener("change",renderClosing);
+$("completeClosing").addEventListener("click",saveMonthlyClosing);
+$("refreshClosing").addEventListener("click",saveMonthlyClosing);
+$("reopenClosing").addEventListener("click",reopenMonthlyClosing);
+$("printClosing").addEventListener("click",()=>window.print());
 $("menuToggle").addEventListener("click",openMenu);
 $("menuClose").addEventListener("click",closeMenu);
 $("menuOverlay").addEventListener("click",e=>{if(e.target===$("menuOverlay"))closeMenu()});
