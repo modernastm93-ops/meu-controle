@@ -31,7 +31,7 @@ function putRecord(store,value){
  return new Promise((resolve,reject)=>{const r=db.transaction(store,"readwrite").objectStore(store).put(value);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
 }
 function deleteRecord(store,id){
- return new Promise((resolve,reject)=>{const r=db.transaction(store,"readwrite").objectStore(store).delete(store==="items"||store==="recurring"?Number(id):id);r.onsuccess=resolve;r.onerror=()=>reject(r.error)});
+ return new Promise((resolve,reject)=>{const r=db.transaction(store,"readwrite").objectStore(store).delete(store==="items"||store==="recurring"||store==="goals"?Number(id):id);r.onsuccess=resolve;r.onerror=()=>reject(r.error)});
 }
 function getSetting(key){
  return new Promise((resolve,reject)=>{const r=db.transaction("settings").objectStore("settings").get(key);r.onsuccess=()=>resolve(r.result?.value);r.onerror=()=>reject(r.error)});
