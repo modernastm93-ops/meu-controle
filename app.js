@@ -349,7 +349,7 @@ document.addEventListener("click",async e=>{
  const goalAdd=e.target.closest("[data-goal-add]");if(goalAdd){openGoalContribution(goalAdd.dataset.goalAdd);return}
  const goalDelete=e.target.closest("[data-goal-delete]");if(goalDelete&&confirm("Excluir esta meta? O histórico de contribuições dela também será removido.")){await deleteRecord("goals",goalDelete.dataset.goalDelete);goals=await getAll("goals");await render();toast("Meta excluída.");return}
  const suggestedBudget=e.target.closest("[data-suggest-budget]");if(suggestedBudget){openBudget(suggestedBudget.dataset.suggestBudget,Number(suggestedBudget.dataset.suggestAmount));return}
- const suggestedGoal=e.target.closest("[data-suggest-goal]");if(suggestedGoal){openGoalForm(Number(suggestedGoal.dataset.suggestGoal)*6);return}
+ const suggestedGoal=e.target.closest("[data-suggest-goal]");if(suggestedGoal){openGoalForm(Number(suggestedGoal.dataset.suggestGoal));return}
  const paid=e.target.closest("[data-paid]");if(paid){await markPaid(paid.dataset.paid);renderAll();return}
  const del=e.target.closest("[data-del]");if(del&&confirm("Excluir este lançamento?")){await deleteRecord("items",del.dataset.del);items=await getAll("items");await render();renderAll();toast("Lançamento excluído.");return}
  const editBudget=e.target.closest("[data-budget-edit]");if(editBudget){openBudget(editBudget.dataset.budgetEdit);return}
