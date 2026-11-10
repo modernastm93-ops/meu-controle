@@ -234,12 +234,12 @@ function monthlyGoalReserve(){
 function renderAvailable(monthTotals){
  const goalReserve=month===thisMonth()?monthlyGoalReserve():0;
  const available=monthTotals.income-monthTotals.expenses-goalReserve;
- $("availableAmount").textContent=money(Math.max(0,available));
+ $("availableAmount").textContent=money(available);
  $("availableAmount").classList.toggle("available-negative",available<=0&&monthTotals.income>0);
  if(monthTotals.income<=0){
   $("availableMessage").textContent="Cadastre suas receitas deste mês para calcular quanto ainda pode gastar.";
  }else if(available<=0){
-  $("availableMessage").textContent="As despesas registradas e a reserva planejada para suas metas já comprometem toda a receita cadastrada. Revise seus gastos antes de assumir novas despesas.";
+  $("availableMessage").textContent="As despesas pagas e pendentes, junto com a reserva planejada para suas metas, superam a receita cadastrada em " + money(Math.abs(available)) + ". Revise seus gastos antes de assumir novas despesas.";
  }else{
   $("availableMessage").textContent="Este é o valor estimado que sobra depois das despesas registradas e da reserva mensal planejada para suas metas.";
  }
@@ -266,7 +266,7 @@ async function addCustomCategory(e){
  f.reset();renderCustomCategories();toast("Categoria adicionada!");
 }
 async function removeCustomCategory(kind,name){
- const used=items.some(x=>x.category===name)||recurrings.some(x=>x.category===name)||budgets.some(x=>x.category===name);
+ const used=items.some(x=>x.category===name)||recurrings.some(x=>x.category===name)||budgets.some(x=>x.category===name)||favorites.some(x=>x.category===name);
  if(used){toast("Essa categoria já está em uso e não pode ser removida.");return}
  customCategories[kind]=(customCategories[kind]||[]).filter(x=>x!==name);
  await putRecord("settings",{key:"customCategories",value:customCategories});
@@ -479,7 +479,7 @@ document.querySelector('[data-menu-action="reports"]').addEventListener("click",
 });
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("menuOverlay").hidden)closeMenu()});
 document.addEventListener("click",async e=>{
- const edit=e.target.closest("[data-edit]");if(edit){const record=items.find(x=>Number(x.id)===Number(edit.dataset.edit));if(record)openTransactionForm(record);return}
+ const edit=e.target.closest("[data-edit]");if(edit){const record=items.find(x=>Number(x.id)===Number(edit.dataset.edit));if($("listdlg").open)$("listdlg").close();if(record)openTransactionForm(record);return}
  const favoriteToggle=e.target.closest("[data-favorite-toggle]");if(favoriteToggle){await toggleFavorite(favoriteToggle.dataset.favoriteToggle);return}
  const useFav=e.target.closest("[data-use-favorite]");if(useFav){useFavorite(useFav.dataset.useFavorite);return}
  const removeFav=e.target.closest("[data-remove-favorite]");if(removeFav){favorites=favorites.filter(x=>String(x.id)!==String(removeFav.dataset.removeFavorite));await putRecord("settings",{key:"favorites",value:favorites});renderFavorites();renderAll();toast("Favorito removido.");return}
