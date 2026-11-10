@@ -40,3 +40,13 @@ https://modernastm93-ops.github.io/meu-controle/
 - Avisos de metas com prazo vencido.
 - Prévia dos principais pontos de atenção no Dashboard e contador no menu.
 - A análise roda no dispositivo ao abrir/atualizar o aplicativo; não envia notificações externas nem acessa contas bancárias.
+
+## Fechamento mensal (v1.9)
+- Relatório por competência com receitas, despesas, saldo, despesas fixas e variáveis, valores pagos e contas pendentes.
+- Comparação das despesas com o mês anterior; no mês atual, compara até o mesmo dia para evitar confronto entre períodos de tamanhos diferentes.
+- Ranking das categorias com maior despesa.
+- Situação dos orçamentos definidos para o mês.
+- Contribuições registradas para metas e contas que ainda precisam de atenção.
+- Checklist de conferência antes de concluir o mês.
+- Fechamentos concluídos ficam registrados no IndexedDB local. Se os lançamentos ou dados relacionados mudarem depois, o aplicativo sinaliza que o resumo está desatualizado e permite atualizá-lo ou reabri-lo.
+- O fechamento não bloqueia novos registros. A impressão do relatório pode ser salva em PDF pelo navegador.
