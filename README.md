@@ -1,29 +1,33 @@
-# Meu Controle — PWA v1.2
+# Meu Controle — PWA v1.5
 
-Aplicativo financeiro pessoal e familiar com tema escuro, senha local, armazenamento local e suporte offline.
+Aplicativo financeiro pessoal e familiar com tema escuro, login local, armazenamento local e suporte offline.
 
 ## Recursos
-- Cadastro de despesas e receitas
-- Classificação de despesas fixas e variáveis
-- Categorias, vencimentos e forma de pagamento
-- Contas pendentes, em atraso e marcação como pagas
+- Dashboard mensal com receitas, despesas, saldo e estimativa de quanto ainda pode gastar
+- Cálculo de disponibilidade considerando despesas registradas (pagas e pendentes) e reserva mensal estimada para metas
+- Cadastro, edição, busca e exclusão de lançamentos
+- Categorias padrão e categorias personalizadas para despesas e receitas
+- Lançamentos favoritos para registrar movimentações frequentes rapidamente
+- Contas pendentes, vencimentos e marcação como pagas
 - Despesas recorrentes mensais
-- Orçamento por categoria
-- Metas financeiras com prazo, progresso e registro de valores guardados
-- Sugestões calculadas localmente a partir do histórico de despesas e receitas
+- Orçamentos por categoria
+- Metas financeiras com prazo e acompanhamento de valores guardados
+- Sugestões locais com base no histórico recente
 - Comparativo de despesas entre meses
-- Backup JSON dos lançamentos
+- Backup JSON dos lançamentos (a exportação atual ainda não inclui metas, orçamentos, recorrências, favoritos ou categorias personalizadas)
 
 ## Executar localmente
 Abra a pasta no terminal e execute `python -m http.server 8000`. Acesse `http://localhost:8000`.
 
 ## Publicação
-O projeto é publicado pelo GitHub Actions no GitHub Pages. Endereço: https://modernastm93-ops.github.io/meu-controle/
+O projeto é publicado pelo GitHub Actions no GitHub Pages:
+https://modernastm93-ops.github.io/meu-controle/
 
 ## Dados, privacidade e limitações
-- Lançamentos, metas, orçamentos, recorrências e credenciais locais ficam no IndexedDB deste navegador/dispositivo.
+- Lançamentos, metas, orçamentos, recorrências, categorias personalizadas, favoritos e credenciais locais ficam no IndexedDB deste navegador/dispositivo.
 - Não há sincronização entre dispositivos nem envio automático para nuvem.
 - A senha local é armazenada como hash PBKDF2-SHA-256; ela protege a interface, mas não criptografa o banco de dados.
-- As sugestões são regras locais e estimativas, não consultoria financeira nem previsões.
-- O backup atual exporta apenas lançamentos; metas, orçamentos e modelos recorrentes ainda não estão incluídos. Faça cópia separada dessas informações antes de trocar de dispositivo ou limpar os dados do navegador.
+- A estimativa de quanto ainda pode gastar é calculada a partir das receitas cadastradas, despesas do mês (incluindo as pendentes) e reserva mensal sugerida para as metas. Ela depende da qualidade e completude dos lançamentos.
+- Sugestões são regras locais e estimativas, não consultoria financeira nem previsões.
+- A exportação de backup atual inclui apenas lançamentos. Faça backups e mantenha cópias seguras antes de limpar os dados do navegador ou trocar de dispositivo.
 - Importar backup substitui os lançamentos atuais, preservando os demais cadastros locais.
