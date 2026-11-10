@@ -111,7 +111,6 @@ function renderRecurring(){
  if(!recurrings.length){$("recurringList").innerHTML='<p class="muted">Cadastre contas mensais para gerar lançamentos automaticamente.</p>';return}
  $("recurringList").innerHTML=recurrings.slice().sort((a,b)=>a.description.localeCompare(b.description)).map(r=>'<div class="recurring-row"><div class="bill-info"><b>'+safe(r.description)+'</b><small>'+safe(r.category)+' · Todo dia '+r.dueDay+' · '+money(r.amount)+'</small><span class="status '+(r.active?"paid":"inactive")+'">'+(r.active?"Ativa":"Pausada")+'</span></div><button class="tiny-link" data-recurring-toggle="'+r.id+'">'+(r.active?"Pausar":"Ativar")+'</button><button class="tiny-link danger" data-recurring-delete="'+r.id+'">Excluir</button></div>').join("");
 }
-async 
 function monthsRemaining(targetDate){
  const target=new Date(targetDate+"T12:00:00"),now=new Date();
  const diff=(target.getFullYear()-now.getFullYear())*12+(target.getMonth()-now.getMonth());
@@ -201,7 +200,7 @@ async function addGoalContribution(e){
  await putRecord("goals",goal);goals=await getAll("goals");$("goalContributionDialog").close();await render();toast("Progresso da meta atualizado!");
 }
 
-function render(){
+async function render(){
  await materializeRecurring(month);
  const xs=monthItems(),s=totals(xs),parts=month.split("-").map(Number);
  $("month").value=month;$("filtermonth").value=month;
