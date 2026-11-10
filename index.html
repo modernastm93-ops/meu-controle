@@ -36,6 +36,16 @@
     <div id="budgetList" class="muted">Defina limites para acompanhar seus gastos.</div>
   </section>
 
+  <section class="panel" id="goalsPanel">
+    <div class="heading"><div><small>SEUS PLANOS</small><h3>Metas financeiras</h3></div><button class="link" id="addGoal">+ Nova meta</button></div>
+    <div id="goalsList" class="muted">Crie uma meta para acompanhar seu progresso.</div>
+  </section>
+
+  <section class="panel" id="suggestionsPanel">
+    <div class="heading"><div><small>ANÁLISE DO SEU HISTÓRICO</small><h3>Sugestões para você</h3></div><span class="counter">Atualizadas pelos lançamentos</span></div>
+    <div id="suggestionsList" class="muted">As sugestões aparecerão conforme você registra suas movimentações.</div>
+  </section>
+
   <section class="panel" id="recurringPanel">
     <div class="heading"><div><small>AUTOMAÇÃO</small><h3>Despesas recorrentes</h3></div><button class="link" id="addRecurring">+ Nova recorrência</button></div>
     <div id="recurringList" class="muted">Cadastre contas mensais para gerar lançamentos automaticamente.</div>
@@ -61,8 +71,8 @@
   <button class="active" data-target="homePanel">⌂<small>Início</small></button>
   <button data-target="billsPanel">▤<small>Contas</small></button>
   <button class="add" id="add" aria-label="Adicionar lançamento">＋</button>
-  <button data-target="budgetPanel">◫<small>Orçamento</small></button>
-  <button data-target="chartPanel">◔<small>Gastos</small></button>
+  <button data-target="goalsPanel">◎<small>Metas</small></button>
+  <button data-target="suggestionsPanel">✦<small>Sugestões</small></button>
 </nav>
 </div>
 
@@ -123,6 +133,28 @@
 <label>Limite do mês (R$)<input name="amount" type="number" min=".01" step=".01" required placeholder="Ex.: 800,00"></label>
 <p class="muted">O limite é aplicado ao mês selecionado no painel.</p>
 <button type="submit" class="primary">Salvar limite</button>
+</form>
+</dialog>
+
+<dialog id="goalDialog">
+<form id="goalForm">
+<div class="dlghead"><div><small>NOVO OBJETIVO</small><h2>Criar meta financeira</h2></div><button type="button" class="x" id="closeGoal">×</button></div>
+<label>Nome da meta<input name="title" required maxlength="60" placeholder="Ex.: Reserva de emergência"></label>
+<div class="row"><label>Quanto deseja juntar (R$)<input name="targetAmount" type="number" min=".01" step=".01" required placeholder="10000,00"></label><label>Quanto já guardou (R$)<input name="currentAmount" type="number" min="0" step=".01" value="0"></label></div>
+<label>Prazo para alcançar<input name="targetDate" type="date" required></label>
+<p class="muted">O aplicativo calcula quanto você precisaria guardar por mês para atingir o objetivo no prazo.</p>
+<button class="primary" type="submit">Salvar meta</button>
+</form>
+</dialog>
+
+<dialog id="goalContributionDialog">
+<form id="goalContributionForm">
+<div class="dlghead"><div><small>PROGRESSO DA META</small><h2>Adicionar valor guardado</h2></div><button type="button" class="x" id="closeGoalContribution">×</button></div>
+<input type="hidden" name="goalId">
+<p class="muted" id="goalContributionName"></p>
+<label>Valor que guardou (R$)<input name="amount" type="number" min=".01" step=".01" required placeholder="100,00"></label>
+<p class="muted">Este registro atualiza o progresso da meta; não cria uma despesa nem uma receita no fluxo financeiro.</p>
+<button class="primary" type="submit">Atualizar progresso</button>
 </form>
 </dialog>
 
