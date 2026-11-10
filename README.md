@@ -58,3 +58,9 @@ https://modernastm93-ops.github.io/meu-controle/
 - Descrições curtas nas telas internas para orientar a navegação.
 - Ajustes de acessibilidade para foco de teclado e preferência por movimento reduzido.
 - Relatório mensal com estilos próprios para impressão e salvamento em PDF.
+
+## Dashboard v2.1 — layout e design
+- Dashboard reconstruído com grade responsiva própria, espaçamento consistente e cartões com maior área útil.
+- No celular, os cartões principais ficam em uma coluna com respiro entre blocos; os dois indicadores de gastos ficam lado a lado em telas comuns e empilhados em telas estreitas.
+- Em telas maiores, resumo, disponibilidade, alertas e indicadores são organizados em duas colunas com o gráfico ocupando a largura total.
+- Tipografia, hierarquia de valores, cartões e seletor de período receberam refinamento visual.
