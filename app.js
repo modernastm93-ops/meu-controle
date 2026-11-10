@@ -1,4 +1,4 @@
-const DB="meu-controle-db", DB_VERSION=2, STORE="items";
+const DB="meu-controle-db", DB_VERSION=3, STORE="items";
 const CATS={
  expense:["Moradia","Energia","Água","Internet","Supermercado","Alimentação","Transporte","Combustível","Saúde","Farmácia","Bebê / criança","Cuidados pessoais","Educação","Lazer","Roupas","Assinaturas","Cartão / parcelas","Outros"],
  income:["Salário","Renda extra","Vendas","Investimentos","Reembolso","Outros"]
@@ -8,7 +8,7 @@ const $=id=>document.getElementById(id);
 const money=n=>Number(n||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const today=()=>new Date().toISOString().slice(0,10);
 const thisMonth=()=>today().slice(0,7);
-let db,items=[],recurrings=[],budgets=[],month=thisMonth(),installPrompt=null,firstAccess=false;
+let db,items=[],recurrings=[],budgets=[],goals=[],month=thisMonth(),installPrompt=null,firstAccess=false;
 
 function openDB(){
  return new Promise((resolve,reject)=>{
@@ -19,6 +19,7 @@ function openDB(){
    if(!d.objectStoreNames.contains("recurring"))d.createObjectStore("recurring",{keyPath:"id",autoIncrement:true});
    if(!d.objectStoreNames.contains("budgets"))d.createObjectStore("budgets",{keyPath:"id"});
    if(!d.objectStoreNames.contains("settings"))d.createObjectStore("settings",{keyPath:"key"});
+   if(!d.objectStoreNames.contains("goals"))d.createObjectStore("goals",{keyPath:"id",autoIncrement:true});
   };
   req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
  });
@@ -35,7 +36,7 @@ function deleteRecord(store,id){
 function getSetting(key){
  return new Promise((resolve,reject)=>{const r=db.transaction("settings").objectStore("settings").get(key);r.onsuccess=()=>resolve(r.result?.value);r.onerror=()=>reject(r.error)});
 }
-async function refreshData(){items=await getAll("items");recurrings=await getAll("recurring");budgets=await getAll("budgets")}
+async function refreshData(){items=await getAll("items");recurrings=await getAll("recurring");budgets=await getAll("budgets");goals=await getAll("goals")}
 function safe(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function dateFmt(d){if(!d)return "Sem data";return new Date(d+"T12:00:00").toLocaleDateString("pt-BR")}
 function monthItems(mm=month){return items.filter(x=>x.date&&x.date.slice(0,7)===mm)}
@@ -110,14 +111,104 @@ function renderRecurring(){
  if(!recurrings.length){$("recurringList").innerHTML='<p class="muted">Cadastre contas mensais para gerar lançamentos automaticamente.</p>';return}
  $("recurringList").innerHTML=recurrings.slice().sort((a,b)=>a.description.localeCompare(b.description)).map(r=>'<div class="recurring-row"><div class="bill-info"><b>'+safe(r.description)+'</b><small>'+safe(r.category)+' · Todo dia '+r.dueDay+' · '+money(r.amount)+'</small><span class="status '+(r.active?"paid":"inactive")+'">'+(r.active?"Ativa":"Pausada")+'</span></div><button class="tiny-link" data-recurring-toggle="'+r.id+'">'+(r.active?"Pausar":"Ativar")+'</button><button class="tiny-link danger" data-recurring-delete="'+r.id+'">Excluir</button></div>').join("");
 }
-async function render(){
+async 
+function monthsRemaining(targetDate){
+ const target=new Date(targetDate+"T12:00:00"),now=new Date();
+ const diff=(target.getFullYear()-now.getFullYear())*12+(target.getMonth()-now.getMonth());
+ return Math.max(1,diff+(target.getDate()>now.getDate()?1:0));
+}
+function renderGoals(){
+ const list=$("goalsList");
+ if(!goals.length){list.innerHTML='<p class="muted">Você ainda não criou metas. Experimente começar com uma reserva de emergência, uma viagem ou uma compra planejada.</p>';return}
+ const ordered=goals.slice().sort((a,b)=>new Date(a.targetDate)-new Date(b.targetDate));
+ list.innerHTML=ordered.map(g=>{
+  const target=Number(g.targetAmount)||0,current=Number(g.currentAmount)||0,remaining=Math.max(0,target-current);
+  const pct=target?Math.min(100,current/target*100):0,months=monthsRemaining(g.targetDate),monthly=remaining/months;
+  const complete=remaining<=0;
+  return '<div class="goal-card"><div class="goal-top"><div><b>'+safe(g.title)+'</b><small>Prazo: '+dateFmt(g.targetDate)+'</small></div><span class="goal-percent">'+pct.toFixed(0)+'%</span></div><div class="track goal-track"><div class="fill '+(complete?'goal-complete':'')+'" style="width:'+pct+'%"></div></div><div class="goal-figures"><span>Guardado <b>'+money(current)+'</b></span><span>Objetivo <b>'+money(target)+'</b></span></div><div class="goal-footer"><small>'+(complete?'Meta alcançada!': 'Faltam '+money(remaining)+' · aproximadamente '+money(monthly)+'/mês')+'</small><div><button class="mini-action" data-goal-add="'+g.id+'">Adicionar valor</button><button class="tiny-link danger" data-goal-delete="'+g.id+'">Excluir</button></div></div></div>';
+ }).join("");
+}
+function historyMonths(){
+ const found=[...new Set(items.filter(x=>x.date&&x.date.slice(0,7)<=month&&x.kind==="expense").map(x=>x.date.slice(0,7)))].sort();
+ return found.slice(-3);
+}
+function renderSuggestions(){
+ const box=$("suggestionsList"),months=historyMonths();
+ if(!months.length){box.innerHTML='<p class="muted">Ainda não há despesas suficientes para analisar. Registre seus gastos para receber sugestões personalizadas.</p>';return}
+ const monthlyData=months.map(mm=>{
+  const rows=monthItems(mm).filter(x=>x.kind==="expense");
+  const byCategory={};rows.filter(x=>x.classification!=="fixed").forEach(x=>byCategory[x.category]=(byCategory[x.category]||0)+Number(x.amount));
+  return {month:mm,rows,byCategory,totals:totals(monthItems(mm))};
+ });
+ const cards=[];
+ if(months.length<2){
+  const top=monthlyData[0].byCategory;
+  const best=Object.entries(top).sort((a,b)=>b[1]-a[1])[0];
+  cards.push({title:"Estamos conhecendo seu perfil",body:"Por enquanto há registros de despesas em apenas "+months.length+" mês. Ainda não é possível identificar tendências com segurança."+(best?" Sua maior categoria de gasto variável registrada foi "+best[0]+" ("+money(best[1])+").":""),type:"info"});
+  cards.push({title:"Continue registrando",body:"Com pelo menos dois ou três meses completos, o aplicativo poderá comparar categorias e sugerir limites e economias com uma base melhor.",type:"info"});
+ }else{
+  const avg={};for(const d of monthlyData)for(const [cat,val] of Object.entries(d.byCategory))avg[cat]=(avg[cat]||0)+val;
+  const averages=Object.entries(avg).map(([category,total])=>({category,average:total/months.length})).sort((a,b)=>b.average-a.average);
+  const top=averages[0];
+  if(top&&top.average>0){
+   const target=Math.round(top.average*.9*100)/100,saving=top.average-target;
+   cards.push({title:"Oportunidade em "+top.category,body:"Essa categoria representa sua maior média de gastos variáveis nos últimos "+months.length+" meses: "+money(top.average)+"/mês. Um limite inicial de "+money(target)+" poderia liberar cerca de "+money(saving)+" por mês.",type:"action",button:"Criar limite sugerido",category:top.category,amount:target});
+  }
+  const latest=monthlyData[monthlyData.length-1],previous=monthlyData[monthlyData.length-2];
+  const changes=Object.keys({...latest.byCategory,...previous.byCategory}).map(category=>({category,now:latest.byCategory[category]||0,before:previous.byCategory[category]||0})).filter(x=>x.now-x.before>=30&&x.before>0&&(x.now-x.before)/x.before>=.15).sort((a,b)=>(b.now-b.before)-(a.now-a.before));
+  if(changes.length){
+   const c=changes[0];cards.push({title:"Atenção ao aumento em "+c.category,body:"O gasto passou de "+money(c.before)+" para "+money(c.now)+" entre os dois meses mais recentes com registros. Rever esse aumento pode liberar até "+money(c.now-c.before)+" no próximo mês.",type:"info"});
+  }
+  const withIncome=months.map(mm=>({month:mm,s:totals(monthItems(mm))})).filter(x=>x.s.income>0);
+  if(withIncome.length>=2){
+   const avgSurplus=withIncome.reduce((a,x)=>a+(x.s.income-x.s.expenses),0)/withIncome.length;
+   if(avgSurplus>0){
+    const monthlySave=Math.round(avgSurplus*.2*100)/100;
+    cards.push({title:"Transforme parte da sobra em uma meta",body:"Nos meses analisados com receitas registradas, sua sobra média foi "+money(avgSurplus)+". Reservar 20% disso ("+money(monthlySave)+"/mês) pode ajudar a construir uma poupança sem comprometer toda a sobra.",type:"goal",monthly:monthlySave});
+   }
+  }
+  if(!cards.length)cards.push({title:"Mantenha o acompanhamento",body:"Ainda não apareceu uma variação forte o bastante para sugerir um corte específico. Continue registrando receitas e despesas para melhorar a análise.",type:"info"});
+ }
+ box.innerHTML='<p class="muted suggestion-note">Análise local dos últimos '+months.length+' mês(es) com despesas registradas. As sugestões são estimativas baseadas nos lançamentos cadastrados, não previsões.</p>'+cards.map((c,i)=>'<article class="suggestion-card"><div class="suggestion-icon">'+(c.type==="goal"?'◎':c.type==="action"?'↘':'✦')+'</div><div class="suggestion-body"><b>'+safe(c.title)+'</b><p>'+safe(c.body)+'</p>'+(c.type==="action"?'<button class="mini-action" data-suggest-budget="'+safe(c.category)+'" data-suggest-amount="'+c.amount+'">'+safe(c.button)+'</button>':c.type==="goal"?'<button class="mini-action" data-suggest-goal="'+c.monthly+'">Criar meta de economia</button>':'')+'</div></article>').join("");
+}
+function openGoalForm(suggestedMonthly){
+ const f=$("goalForm");f.reset();f.elements.currentAmount.value="0";
+ const deadline=new Date();deadline.setMonth(deadline.getMonth()+6);
+ f.elements.targetDate.value=deadline.getFullYear()+"-"+String(deadline.getMonth()+1).padStart(2,"0")+"-"+String(deadline.getDate()).padStart(2,"0");
+ if(suggestedMonthly){f.elements.title.value="Reserva de economia";f.elements.targetAmount.value=(Number(suggestedMonthly)*6).toFixed(2)}
+ $("goalDialog").showModal();
+}
+async function saveGoal(e){
+ e.preventDefault();const f=e.currentTarget,target=Number(f.elements.targetAmount.value),current=Number(f.elements.currentAmount.value||0),deadline=f.elements.targetDate.value;
+ if(!(target>0)||current<0||!deadline){toast("Confira os valores e o prazo da meta.");return}
+ if(deadline<today()){toast("Escolha um prazo a partir de hoje.");return}
+ await putRecord("goals",{title:f.elements.title.value.trim(),targetAmount:target,currentAmount:current,targetDate:deadline,contributions:current>0?[{amount:current,date:today()}]:[],createdAt:new Date().toISOString()});
+ goals=await getAll("goals");$("goalDialog").close();await render();toast("Meta criada!");
+}
+function openGoalContribution(id){
+ const goal=goals.find(g=>Number(g.id)===Number(id));if(!goal)return;
+ const f=$("goalContributionForm");f.reset();f.elements.goalId.value=goal.id;
+ $("goalContributionName").textContent="Meta: "+goal.title;
+ $("goalContributionDialog").showModal();
+}
+async function addGoalContribution(e){
+ e.preventDefault();const f=e.currentTarget,id=Number(f.elements.goalId.value),amount=Number(f.elements.amount.value);
+ const goal=goals.find(g=>Number(g.id)===id);
+ if(!goal||!(amount>0)){toast("Informe um valor válido.");return}
+ goal.currentAmount=Number(goal.currentAmount||0)+amount;
+ goal.contributions=Array.isArray(goal.contributions)?goal.contributions:[];
+ goal.contributions.push({amount,date:today()});
+ await putRecord("goals",goal);goals=await getAll("goals");$("goalContributionDialog").close();await render();toast("Progresso da meta atualizado!");
+}
+
+function render(){
  await materializeRecurring(month);
  const xs=monthItems(),s=totals(xs),parts=month.split("-").map(Number);
  $("month").value=month;$("filtermonth").value=month;
  $("monthName").textContent=new Date(parts[0],parts[1]-1,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
  $("expenses").textContent=money(s.expenses);$("income").textContent=money(s.income);$("balance").textContent=money(s.income-s.expenses);
  $("fixed").textContent=money(s.fixed);$("variable").textContent=money(s.variable);
- renderBills(xs);renderBudgets(xs);renderRecurring();renderChart(xs);
+ renderBills(xs);renderBudgets(xs);renderRecurring();renderGoals();renderSuggestions();renderChart(xs);
  renderTransactions(xs.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5),"list");
 }
 function renderAll(){
@@ -151,10 +242,11 @@ async function saveBudget(e){
  await putRecord("budgets",{id:month+"::"+category,month,category,amount});
  budgets=await getAll("budgets");$("budgetdlg").close();await render();toast("Limite mensal salvo!");
 }
-function openBudget(category){
+function openBudget(category,suggestedAmount){
  const existing=budgets.find(b=>b.month===month&&b.category===category);
  const f=$("budgetForm");f.reset();setOptions("budgetCategory",CATS.expense,category||existing?.category);
  if(existing){f.elements.category.value=existing.category;f.elements.amount.value=existing.amount}
+ else if(suggestedAmount){f.elements.amount.value=Number(suggestedAmount).toFixed(2)}
  $("budgetdlg").showModal();
 }
 function openRecurring(){
@@ -237,6 +329,13 @@ $("addRecurring").addEventListener("click",openRecurring);$("closeRecurring").ad
 $("recurringForm").addEventListener("submit",saveRecurring);
 $("addBudget").addEventListener("click",()=>openBudget());$("closeBudget").addEventListener("click",()=>$("budgetdlg").close());
 $("budgetForm").addEventListener("submit",saveBudget);
+
+$("addGoal").addEventListener("click",()=>openGoalForm());
+$("closeGoal").addEventListener("click",()=>$("goalDialog").close());
+$("goalForm").addEventListener("submit",saveGoal);
+$("closeGoalContribution").addEventListener("click",()=>$("goalContributionDialog").close());
+$("goalContributionForm").addEventListener("submit",addGoalContribution);
+
 $("closereport").addEventListener("click",()=>$("reportdlg").close());
 $("openReport").addEventListener("click",showReport);
 $("export").addEventListener("click",exportBackup);
@@ -247,6 +346,10 @@ document.querySelectorAll("[data-target]").forEach(button=>button.addEventListen
  else $(button.dataset.target).scrollIntoView({behavior:"smooth",block:"start"});
 }));
 document.addEventListener("click",async e=>{
+ const goalAdd=e.target.closest("[data-goal-add]");if(goalAdd){openGoalContribution(goalAdd.dataset.goalAdd);return}
+ const goalDelete=e.target.closest("[data-goal-delete]");if(goalDelete&&confirm("Excluir esta meta? O histórico de contribuições dela também será removido.")){await deleteRecord("goals",goalDelete.dataset.goalDelete);goals=await getAll("goals");await render();toast("Meta excluída.");return}
+ const suggestedBudget=e.target.closest("[data-suggest-budget]");if(suggestedBudget){openBudget(suggestedBudget.dataset.suggestBudget,Number(suggestedBudget.dataset.suggestAmount));return}
+ const suggestedGoal=e.target.closest("[data-suggest-goal]");if(suggestedGoal){openGoalForm(Number(suggestedGoal.dataset.suggestGoal)*6);return}
  const paid=e.target.closest("[data-paid]");if(paid){await markPaid(paid.dataset.paid);renderAll();return}
  const del=e.target.closest("[data-del]");if(del&&confirm("Excluir este lançamento?")){await deleteRecord("items",del.dataset.del);items=await getAll("items");await render();renderAll();toast("Lançamento excluído.");return}
  const editBudget=e.target.closest("[data-budget-edit]");if(editBudget){openBudget(editBudget.dataset.budgetEdit);return}
