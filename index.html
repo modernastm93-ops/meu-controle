@@ -26,6 +26,12 @@
     <small>TOTAL DE DESPESAS</small><h2 id="expenses">R$ 0,00</h2>
     <div class="twocol"><div><small>Receitas</small><b id="income">R$ 0,00</b></div><div><small>Saldo do mês</small><b id="balance">R$ 0,00</b></div></div>
   </section>
+  <section class="available-card" id="availablePanel">
+    <div class="available-top"><div><small>PLANEJAMENTO DO MÊS</small><h3>Quanto ainda posso gastar?</h3></div><span class="available-indicator">ESTIMATIVA</span></div>
+    <strong id="availableAmount">R$ 0,00</strong>
+    <p id="availableMessage">Registre suas receitas e despesas para calcular seu valor disponível.</p>
+    <div class="available-breakdown" id="availableBreakdown"></div>
+  </section>
       <div class="tiles"><section><span>↻ Gastos fixos</span><b id="fixed">R$ 0,00</b></section><section><span>⌁ Gastos variáveis</span><b id="variable">R$ 0,00</b></section></div>
     <section class="panel" id="chartPanel">
     <div class="heading"><div><small>ACOMPANHAMENTO</small><h3>Despesas por categoria</h3></div><button class="link" id="openReport">Comparar meses</button></div><div id="chart" class="muted">Seus gastos aparecerão aqui.</div>
@@ -34,6 +40,10 @@
   </section>
   <section class="page-view" id="view-transactions" aria-labelledby="title-transactions">
   <div class="page-heading"><div><small>MOVIMENTAÇÕES</small><h1 id="title-transactions">Lançamentos</h1></div></div>
+  <section class="panel favorites-panel" id="favoritesPanel">
+    <div class="heading"><div><small>ATALHOS</small><h3>Lançamentos favoritos</h3></div></div>
+    <div id="favoritesList" class="muted">Marque lançamentos com a estrela para cadastrá-los como favoritos.</div>
+  </section>
   <section class="panel" id="transactionsPanel">
     <div class="heading"><div><small>MOVIMENTAÇÕES</small><h3>Últimos lançamentos</h3></div><button class="link" id="all">Ver todos</button></div>
     <div id="list" class="muted">Nenhum lançamento neste mês.</div>
@@ -52,7 +62,23 @@
     <div class="heading"><div><small>PLANEJAMENTO</small><h3>Orçamento por categoria</h3></div><button class="link" id="addBudget">+ Definir limite</button></div>
     <div id="budgetList" class="muted">Defina limites para acompanhar seus gastos.</div>
   </section>
-</section>
+</section> 
+  <section class="page-view" id="view-categories" aria-labelledby="title-categories">
+    <div class="page-heading"><div><small>PERSONALIZAÇÃO</small><h1 id="title-categories">Minhas categorias</h1></div></div>
+    <section class="panel">
+      <div class="heading"><div><small>ORGANIZAÇÃO</small><h3>Criar categoria</h3></div></div>
+      <form id="categoryForm" class="inline-form">
+        <label>Tipo<select name="kind"><option value="expense">Despesa</option><option value="income">Receita</option></select></label>
+        <label>Nome da categoria<input name="name" required maxlength="35" placeholder="Ex.: Pets, Academia, Freelance"></label>
+        <button type="submit" class="primary">Adicionar categoria</button>
+      </form>
+    </section>
+    <section class="panel">
+      <div class="heading"><div><small>PERSONALIZADAS</small><h3>Categorias cadastradas</h3></div></div>
+      <div id="customCategoryList" class="muted">Nenhuma categoria personalizada.</div>
+      <p class="muted">Categorias usadas em lançamentos, orçamentos ou despesas recorrentes não podem ser removidas.</p>
+    </section>
+  </section>
   <section class="page-view" id="view-goals" aria-labelledby="title-goals">
   <div class="page-heading"><div><small>SEUS PLANOS</small><h1 id="title-goals">Metas financeiras</h1></div></div>
   <section class="panel" id="goalsPanel">
@@ -97,6 +123,7 @@
     <button class="menu-link" type="button" data-menu-view="transactions"><span class="menu-icon">▤</span><span>Lançamentos</span></button>
     <button class="menu-link" type="button" data-menu-view="bills"><span class="menu-icon">◷</span><span>Contas a pagar</span></button>
     <button class="menu-link" type="button" data-menu-view="budget"><span class="menu-icon">◫</span><span>Orçamento</span></button>
+    <button class="menu-link" type="button" data-menu-view="categories"><span class="menu-icon">▦</span><span>Categorias</span></button>
     <button class="menu-link" type="button" data-menu-view="goals"><span class="menu-icon">◎</span><span>Metas financeiras</span></button>
     <button class="menu-link" type="button" data-menu-view="recurring"><span class="menu-icon">↻</span><span>Despesas recorrentes</span></button>
     <div class="drawer-section-label">ANÁLISE</div>
@@ -125,7 +152,8 @@
 
 <dialog id="formdlg">
 <form id="form">
-  <div class="dlghead"><div><small>NOVO REGISTRO</small><h2>Adicionar lançamento</h2></div><button type="button" class="x" id="close">×</button></div>
+  <div class="dlghead"><div><small>NOVO REGISTRO</small><h2 id="transactionDialogTitle">Adicionar lançamento</h2></div><button type="button" class="x" id="close">×</button></div>
+  <input type="hidden" name="itemId">
   <div class="switch"><label><input type="radio" name="kind" value="expense" checked>Despesa</label><label><input type="radio" name="kind" value="income">Receita</label></div>
   <label>Descrição<input name="desc" required maxlength="70" placeholder="Ex.: supermercado"></label>
   <div class="row"><label>Valor (R$)<input name="amount" type="number" min=".01" step=".01" required placeholder="0,00"></label><label>Data<input name="date" type="date" required></label></div>
@@ -136,13 +164,14 @@
   </div>
   <label>Pagamento<select name="payment"><option>Pix</option><option>Dinheiro</option><option>Débito</option><option>Crédito</option><option>Transferência</option><option>Boleto</option><option>Outro</option></select></label>
   <label>Observação<input name="note" maxlength="140" placeholder="Opcional"></label>
-  <button class="primary" type="submit">Salvar lançamento</button>
+  <button class="primary" id="saveTransaction" type="submit">Salvar lançamento</button>
 </form>
 </dialog>
 
 <dialog id="listdlg">
 <div class="dlghead"><div><small>HISTÓRICO</small><h2>Lançamentos</h2></div><button class="x" id="closeall">×</button></div>
 <div class="row"><input id="filtermonth" type="month"><select id="filtertype"><option value="all">Todos</option><option value="expense">Despesas</option><option value="income">Receitas</option></select></div>
+<label class="search-field"><span>Buscar lançamento</span><input id="searchTransactions" type="search" placeholder="Descrição, categoria ou observação"></label>
 <div id="alllist"></div>
 </dialog>
 
