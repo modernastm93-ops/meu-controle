@@ -6,7 +6,10 @@ const CATS={
 const ICONS={"Supermercado":"🛒","Alimentação":"☕","Combustível":"⛽","Bebê / criança":"♡","Energia":"ϟ","Farmácia":"✚","Salário":"＋","Internet":"⌁","Moradia":"⌂","Outros":"•"};
 const $=id=>document.getElementById(id);
 const money=n=>Number(n||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
-const today=()=>new Date().toISOString().slice(0,10);
+const today=()=>{
+ const d=new Date();
+ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+};
 const thisMonth=()=>today().slice(0,7);
 let db,items=[],recurrings=[],budgets=[],goals=[],customCategories={expense:[],income:[]},favorites=[],month=thisMonth(),installPrompt=null,firstAccess=false;
 
@@ -273,6 +276,141 @@ async function removeCustomCategory(kind,name){
  renderCustomCategories();toast("Categoria removida.");
 }
 
+
+function dateKeyPlusDays(dateKey,days){
+ const d=new Date(dateKey+"T12:00:00");d.setDate(d.getDate()+days);
+ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function alertDaysUntil(dateKey){
+ return Math.round((new Date(dateKey+"T12:00:00")-new Date(today()+"T12:00:00"))/86400000);
+}
+function alertIcon(severity){
+ return severity==="critical"?"!":severity==="warning"?"△":severity==="ok"?"✓":"i";
+}
+function generateFinancialAlerts(){
+ const alerts=[],now=today();
+ const add=(severity,title,message,actionView,actionLabel)=>{
+  alerts.push({id:"alert-"+alerts.length,severity,title,message,actionView:actionView||"",actionLabel:actionLabel||""});
+ };
+ const pending=items.filter(x=>x.kind==="expense"&&x.status==="pending");
+ const overdue=pending.filter(x=>(x.dueDate||x.date)<now);
+ if(overdue.length){
+  const sum=overdue.reduce((a,x)=>a+Number(x.amount||0),0);
+  add("critical",overdue.length+" conta(s) em atraso",
+   "Você tem "+money(sum)+" em contas vencidas. Priorize os pagamentos e atualize o status assim que quitar."+(overdue.length<=3?" Contas: "+overdue.map(x=>x.description).join(", "):""),
+   "bills","Ver contas a pagar");
+ }
+ const upcoming=pending.filter(x=>{
+  const days=alertDaysUntil(x.dueDate||x.date);
+  return days>=0&&days<=7;
+ }).sort((a,b)=>(a.dueDate||a.date).localeCompare(b.dueDate||b.date));
+ if(upcoming.length){
+  const sum=upcoming.reduce((a,x)=>a+Number(x.amount||0),0);
+  const todayDue=upcoming.filter(x=>(x.dueDate||x.date)===now).length;
+  const intro=todayDue?todayDue+" vence(m) hoje. ":"";
+  add("warning",upcoming.length+" conta(s) vencem nos próximos 7 dias",
+   intro+"Ao todo, "+money(sum)+" ainda precisa ser pago. Confira as datas para evitar atrasos.",
+   "bills","Conferir vencimentos");
+ }
+ const xs=monthItems(month),summary=totals(xs);
+ if(summary.income>0&&summary.expenses>summary.income){
+  add("critical","Despesas acima das receitas",
+   "Neste mês, as despesas registradas superam as receitas em "+money(summary.expenses-summary.income)+". Reveja os gastos restantes e confira se todas as receitas foram cadastradas.",
+   "transactions","Revisar lançamentos");
+ }else if(summary.expenses>0&&summary.income===0){
+  add("info","Receitas ainda não registradas",
+   "Há despesas neste mês, mas nenhuma receita cadastrada. Inclua salários e outras entradas para melhorar os cálculos de saldo e disponibilidade.",
+   "transactions","Cadastrar receitas");
+ }
+ const monthBudgets=budgets.filter(b=>b.month===month);
+ const budgetAlerts=[];
+ for(const b of monthBudgets){
+  const spent=xs.filter(x=>x.kind==="expense"&&x.category===b.category).reduce((a,x)=>a+Number(x.amount||0),0);
+  const pct=Number(b.amount)>0?spent/Number(b.amount)*100:0;
+  if(pct>=100){
+   budgetAlerts.push({severity:"critical",category:b.category,pct,spent,limit:Number(b.amount)});
+  }else if(pct>=85){
+   budgetAlerts.push({severity:"warning",category:b.category,pct,spent,limit:Number(b.amount)});
+  }
+ }
+ budgetAlerts.sort((a,b)=>b.pct-a.pct);
+ budgetAlerts.slice(0,4).forEach(b=>{
+  const exceeded=b.pct>=100;
+  add(exceeded?"critical":"warning",
+   (exceeded?"Orçamento ultrapassado: ":"Orçamento perto do limite: ")+b.category,
+   "Você utilizou "+b.pct.toFixed(0)+"% do limite de "+money(b.limit)+" e já registrou "+money(b.spent)+" nesta categoria no mês selecionado.",
+   "budget","Ver orçamento");
+ });
+ const currentKey=month;
+ const previousKey=previousMonth(currentKey);
+ const currentDate=new Date(currentKey+"-01T12:00:00");
+ const isCurrentOrFuture=currentKey>=thisMonth();
+ const cutoffDay=currentKey===thisMonth()?Number(now.slice(8,10)):new Date(currentDate.getFullYear(),currentDate.getMonth()+1,0).getDate();
+ const cutoffPrevious=previousKey+"-"+String(Math.min(cutoffDay,new Date(Number(previousKey.slice(0,4)),Number(previousKey.slice(5,7)),0).getDate())).padStart(2,"0");
+ const currentCutoff=currentKey+"-"+String(cutoffDay).padStart(2,"0");
+ const periodExpenses=(key,cutoff)=>items.filter(x=>x.kind==="expense"&&x.date&&x.date.slice(0,7)===key&&x.date<=cutoff);
+ const compareNow=periodExpenses(currentKey,currentCutoff);
+ const compareBefore=periodExpenses(previousKey,cutoffPrevious);
+ const sumNow=compareNow.reduce((a,x)=>a+Number(x.amount||0),0);
+ const sumBefore=compareBefore.reduce((a,x)=>a+Number(x.amount||0),0);
+ if(compareNow.length&&compareBefore.length&&sumBefore>=100){
+  const diff=sumNow-sumBefore,pct=diff/sumBefore*100;
+  if(diff>=100&&pct>=20){
+   add("warning","Despesas cresceram em relação ao período anterior",
+    "Até o mesmo dia do mês, suas despesas passaram de "+money(sumBefore)+" para "+money(sumNow)+" ("+pct.toFixed(0)+"% a mais). Confira o que mudou.",
+    "suggestions","Ver análise do histórico");
+  }
+  const byCategory={};
+  for(const x of compareNow)if(x.classification!=="fixed")byCategory[x.category]=(byCategory[x.category]||0)+Number(x.amount||0);
+  const beforeByCategory={};
+  for(const x of compareBefore)if(x.classification!=="fixed")beforeByCategory[x.category]=(beforeByCategory[x.category]||0)+Number(x.amount||0);
+  Object.keys({...byCategory,...beforeByCategory}).map(category=>({
+   category,now:byCategory[category]||0,before:beforeByCategory[category]||0
+  })).filter(x=>x.before>0&&x.now-x.before>=30&&(x.now-x.before)/x.before>=.15)
+   .sort((a,b)=>(b.now-b.before)-(a.now-a.before)).slice(0,2).forEach(x=>{
+    add("warning","Aumento em "+x.category,
+     "O gasto variável passou de "+money(x.before)+" para "+money(x.now)+" em relação ao mesmo período do mês anterior. A diferença é de "+money(x.now-x.before)+".",
+     "suggestions","Analisar sugestões");
+   });
+ }
+ const overdueGoals=goals.filter(g=>Number(g.currentAmount||0)<Number(g.targetAmount||0)&&g.targetDate<now);
+ overdueGoals.forEach(g=>{
+  const remaining=Number(g.targetAmount||0)-Number(g.currentAmount||0);
+  add("warning","Prazo da meta vencido: "+g.title,
+   "Ainda faltam "+money(remaining)+" para alcançar esta meta. Atualize o prazo ou ajuste o objetivo.",
+   "goals","Revisar meta");
+ });
+ if(!alerts.length){
+  add("ok","Tudo em ordem por enquanto",
+   "Não encontramos contas vencidas, orçamentos próximos do limite ou aumentos relevantes nos registros analisados. Continue mantendo seus dados atualizados.",
+   "suggestions","Ver sugestões");
+ }
+ const order={critical:0,warning:1,info:2,ok:3};
+ return alerts.sort((a,b)=>order[a.severity]-order[b.severity]);
+}
+function alertCardMarkup(alert){
+ const labels={critical:"URGENTE",warning:"ATENÇÃO",info:"INFORMATIVO",ok:"TUDO CERTO"};
+ return '<article class="financial-alert severity-'+alert.severity+'"><div class="financial-alert-icon">'+alertIcon(alert.severity)+'</div><div class="financial-alert-content"><div class="financial-alert-label">'+labels[alert.severity]+'</div><b>'+safe(alert.title)+'</b><p>'+safe(alert.message)+'</p>'+(alert.actionView?'<button class="alert-action" type="button" data-alert-view="'+safe(alert.actionView)+'">'+safe(alert.actionLabel)+' →</button>':'')+'</div></article>';
+}
+function renderAlertCenter(){
+ const alerts=generateFinancialAlerts();
+ const urgent=alerts.filter(a=>a.severity==="critical").length;
+ const warning=alerts.filter(a=>a.severity==="warning").length;
+ const info=alerts.filter(a=>a.severity==="info").length;
+ const active=urgent+warning;
+ $("urgentAlertCount").textContent=urgent;
+ $("warningAlertCount").textContent=warning;
+ $("infoAlertCount").textContent=info;
+ $("alertsLastUpdate").textContent="Atualizado às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+ $("alertsList").innerHTML=alerts.map(alertCardMarkup).join("");
+ $("dashboardAlertCount").textContent=active;
+ $("dashboardAlertTitle").textContent=active?(active===1?"Você tem 1 ponto de atenção":"Você tem "+active+" pontos de atenção"):"Acompanhamento financeiro";
+ $("dashboardAlertPreview").innerHTML=alerts.slice(0,2).map(a=>'<div class="dashboard-alert-item"><span class="dashboard-alert-dot '+a.severity+'"></span><div><b>'+safe(a.title)+'</b><small>'+safe(a.message)+'</small></div></div>').join("");
+ $("alertMenuCount").textContent=active>9?"9+":String(active);
+ $("alertMenuCount").hidden=active===0;
+ $("dashboardAlertCount").classList.toggle("has-alerts",active>0);
+}
+
 async function render(){
  await materializeRecurring(month);
  const xs=monthItems(),s=totals(xs),parts=month.split("-").map(Number);
@@ -280,7 +418,7 @@ async function render(){
  $("monthName").textContent=new Date(parts[0],parts[1]-1,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
  $("expenses").textContent=money(s.expenses);$("income").textContent=money(s.income);$("balance").textContent=money(s.income-s.expenses);
  $("fixed").textContent=money(s.fixed);$("variable").textContent=money(s.variable);
- renderAvailable(s);renderBills(xs);renderBudgets(xs);renderRecurring();renderGoals();renderSuggestions();renderChart(xs);renderFavorites();renderCustomCategories();
+ renderAvailable(s);renderBills(xs);renderBudgets(xs);renderRecurring();renderGoals();renderSuggestions();renderChart(xs);renderFavorites();renderCustomCategories();renderAlertCenter();
  renderTransactions(xs.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5),"list");
 }
 function renderAll(){
@@ -444,7 +582,7 @@ $("closereport").addEventListener("click",()=>$("reportdlg").close());
 $("openReport").addEventListener("click",showReport);
 $("export").addEventListener("click",exportBackup);
 $("import").addEventListener("change",e=>{if(e.target.files[0])importBackup(e.target.files[0]);e.target.value=""});
-const VIEW_LABELS={dashboard:"DASHBOARD",transactions:"LANÇAMENTOS",bills:"CONTAS A PAGAR",budget:"ORÇAMENTO",categories:"CATEGORIAS",goals:"METAS FINANCEIRAS",recurring:"DESPESAS RECORRENTES",suggestions:"SUGESTÕES",data:"BACKUP E SEGURANÇA"};
+const VIEW_LABELS={dashboard:"DASHBOARD",transactions:"LANÇAMENTOS",bills:"CONTAS A PAGAR",budget:"ORÇAMENTO",categories:"CATEGORIAS",goals:"METAS FINANCEIRAS",recurring:"DESPESAS RECORRENTES",alerts:"ALERTAS FINANCEIROS",suggestions:"SUGESTÕES",data:"BACKUP E SEGURANÇA"};
 function openMenu(){
  const overlay=$("menuOverlay");
  overlay.hidden=false;
@@ -469,6 +607,7 @@ function switchView(name){
  closeMenu();
  window.scrollTo({top:0,behavior:"smooth"});
 }
+$("openAlerts").addEventListener("click",()=>switchView("alerts"));
 $("menuToggle").addEventListener("click",openMenu);
 $("menuClose").addEventListener("click",closeMenu);
 $("menuOverlay").addEventListener("click",e=>{if(e.target===$("menuOverlay"))closeMenu()});
@@ -479,6 +618,7 @@ document.querySelector('[data-menu-action="reports"]').addEventListener("click",
 });
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("menuOverlay").hidden)closeMenu()});
 document.addEventListener("click",async e=>{
+ const alertAction=e.target.closest("[data-alert-view]");if(alertAction){switchView(alertAction.dataset.alertView);return}
  const edit=e.target.closest("[data-edit]");if(edit){const record=items.find(x=>Number(x.id)===Number(edit.dataset.edit));if($("listdlg").open)$("listdlg").close();if(record)openTransactionForm(record);return}
  const favoriteToggle=e.target.closest("[data-favorite-toggle]");if(favoriteToggle){await toggleFavorite(favoriteToggle.dataset.favoriteToggle);return}
  const useFav=e.target.closest("[data-use-favorite]");if(useFav){useFavorite(useFav.dataset.useFavorite);return}
