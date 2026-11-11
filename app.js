@@ -649,23 +649,195 @@ function showReport(){
  $("reportdlg").showModal();
 }
 function exportBackup(){
- const payload={app:"Meu Controle",version:1,exportedAt:new Date().toISOString(),transactions:items};
- const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");
- a.href=url;a.download="meu-controle-backup-"+today()+".json";a.click();URL.revokeObjectURL(url);
- $("status").textContent="Backup dos lançamentos exportado: "+items.length+" registro(s).";
+ const payload={
+  app:"Meu Controle",
+  formatVersion:2,
+  exportedAt:new Date().toISOString(),
+  data:{
+   transactions:items,
+   recurring:recurrings,
+   budgets,
+   goals,
+   customCategories,
+   favorites,
+   monthlyClosures
+  }
+ };
+ const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+ const url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download="meu-controle-backup-completo-"+today()+".json";
+ document.body.appendChild(a);a.click();a.remove();
+ window.setTimeout(()=>URL.revokeObjectURL(url),1500);
+ $("status").textContent="Backup completo exportado: "+items.length+" lançamento(s), "+recurrings.length+" recorrência(s), "+budgets.length+" orçamento(s) e "+goals.length+" meta(s). Sua senha local não é incluída.";
+}
+function validDateKey(value){
+ return typeof value==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(new Date(value+"T12:00:00").getTime());
+}
+function validMonthKey(value){
+ return typeof value==="string"&&/^\d{4}-\d{2}$/.test(value)&&!Number.isNaN(new Date(value+"-01T12:00:00").getTime());
+}
+function validRecordId(value){
+ return Number.isSafeInteger(Number(value))&&Number(value)>0;
+}
+function cleanBackupTransactions(rows){
+ if(!Array.isArray(rows))throw new Error("Lista de lançamentos ausente.");
+ return rows.map(x=>{
+  if(!x||!["expense","income"].includes(x.kind)||!String(x.description||"").trim()||!validDateKey(x.date)||!Number.isFinite(Number(x.amount))||Number(x.amount)<=0)throw new Error("Há um lançamento inválido no backup.");
+  const record={
+   kind:x.kind,
+   description:String(x.description).trim().slice(0,70),
+   amount:Number(x.amount),
+   date:x.date,
+   dueDate:x.kind==="expense"&&validDateKey(x.dueDate)?x.dueDate:"",
+   status:x.kind==="expense"&&x.status==="pending"?"pending":"paid",
+   category:String(x.category||"Outros").slice(0,50),
+   classification:x.kind==="expense"&&x.classification==="fixed"?"fixed":x.kind==="expense"?"variable":"income",
+   payment:String(x.payment||"Outro").slice(0,40),
+   note:String(x.note||"").slice(0,500),
+   recurringId:validRecordId(x.recurringId)?Number(x.recurringId):null,
+   createdAt:typeof x.createdAt==="string"?x.createdAt:new Date().toISOString()
+  };
+  if(validRecordId(x.id))record.id=Number(x.id);
+  if(validDateKey(x.paidAt))record.paidAt=x.paidAt;
+  return record;
+ });
+}
+function cleanBackupRecurring(rows){
+ if(!Array.isArray(rows))throw new Error("Lista de recorrências inválida.");
+ return rows.map(x=>{
+  if(!x||!String(x.description||"").trim()||!Number.isFinite(Number(x.amount))||Number(x.amount)<=0||!Number.isInteger(Number(x.dueDay))||Number(x.dueDay)<1||Number(x.dueDay)>28||!validMonthKey(x.startMonth))throw new Error("Há uma recorrência inválida no backup.");
+  const record={
+   description:String(x.description).trim().slice(0,70),
+   amount:Number(x.amount),
+   dueDay:Number(x.dueDay),
+   category:String(x.category||"Outros").slice(0,50),
+   classification:x.classification==="variable"?"variable":"fixed",
+   payment:String(x.payment||"Boleto").slice(0,40),
+   active:x.active!==false,
+   startMonth:x.startMonth,
+   createdAt:typeof x.createdAt==="string"?x.createdAt:new Date().toISOString()
+  };
+  if(validRecordId(x.id))record.id=Number(x.id);
+  return record;
+ });
+}
+function cleanBackupBudgets(rows){
+ if(!Array.isArray(rows))throw new Error("Lista de orçamentos inválida.");
+ return rows.map(x=>{
+  if(!x||!validMonthKey(x.month)||!String(x.category||"").trim()||!Number.isFinite(Number(x.amount))||Number(x.amount)<=0)throw new Error("Há um orçamento inválido no backup.");
+  return {id:String(x.id||x.month+"::"+x.category),month:x.month,category:String(x.category).slice(0,50),amount:Number(x.amount)};
+ });
+}
+function cleanBackupGoals(rows){
+ if(!Array.isArray(rows))throw new Error("Lista de metas inválida.");
+ return rows.map(x=>{
+  if(!x||!String(x.title||"").trim()||!Number.isFinite(Number(x.targetAmount))||Number(x.targetAmount)<=0||!Number.isFinite(Number(x.currentAmount))||Number(x.currentAmount)<0||!validDateKey(x.targetDate))throw new Error("Há uma meta inválida no backup.");
+  const contributions=(Array.isArray(x.contributions)?x.contributions:[]).map(c=>{
+   if(!c||!Number.isFinite(Number(c.amount))||Number(c.amount)<=0||!validDateKey(c.date))throw new Error("Há uma contribuição de meta inválida no backup.");
+   return {amount:Number(c.amount),date:c.date};
+  });
+  const record={
+   title:String(x.title).trim().slice(0,60),
+   targetAmount:Number(x.targetAmount),
+   currentAmount:Number(x.currentAmount),
+   targetDate:x.targetDate,
+   contributions,
+   createdAt:typeof x.createdAt==="string"?x.createdAt:new Date().toISOString()
+  };
+  if(validRecordId(x.id))record.id=Number(x.id);
+  return record;
+ });
+}
+function cleanBackupCategories(value){
+ const result={expense:[],income:[]};
+ if(!value||typeof value!=="object")return result;
+ for(const kind of ["expense","income"]){
+  if(!Array.isArray(value[kind]))continue;
+  result[kind]=[...new Set(value[kind].filter(x=>typeof x==="string"&&x.trim()).map(x=>x.trim().slice(0,35)))];
+ }
+ return result;
+}
+function cleanBackupFavorites(rows){
+ if(!Array.isArray(rows))return [];
+ return rows.filter(x=>x&&String(x.description||"").trim()&&Number.isFinite(Number(x.amount))&&Number(x.amount)>0)
+  .map(x=>({
+   id:String(x.id||x.sourceId||"").slice(0,60),
+   sourceId:validRecordId(x.sourceId)?Number(x.sourceId):null,
+   kind:x.kind==="income"?"income":"expense",
+   description:String(x.description).trim().slice(0,70),
+   amount:Number(x.amount),
+   category:String(x.category||"Outros").slice(0,50),
+   classification:x.classification==="fixed"?"fixed":x.kind==="income"?"income":"variable",
+   payment:String(x.payment||"Outro").slice(0,40),
+   note:String(x.note||"").slice(0,500)
+  }));
+}
+function cleanBackupClosures(rows){
+ if(!Array.isArray(rows))return [];
+ return rows.filter(x=>x&&validMonthKey(x.month)&&typeof x.signature==="string"&&typeof x.closedAt==="string")
+  .map(x=>({month:x.month,signature:x.signature,closedAt:x.closedAt}));
+}
+function waitForTransaction(tx){
+ return new Promise((resolve,reject)=>{
+  tx.oncomplete=()=>resolve();
+  tx.onerror=()=>reject(tx.error||new Error("Falha na gravação do banco local."));
+  tx.onabort=()=>reject(tx.error||new Error("A restauração foi cancelada."));
+ });
 }
 async function importBackup(file){
+ let tx;
  try{
-  const data=JSON.parse(await file.text());if(!Array.isArray(data.transactions))throw new Error("Formato inválido");
-  const clean=data.transactions.map(x=>{
-   if(!["expense","income"].includes(x.kind)||!x.description||!x.date||!(Number(x.amount)>0))throw new Error("Registro inválido");
-   return {kind:x.kind,description:String(x.description).slice(0,70),amount:Number(x.amount),date:x.date,dueDate:x.dueDate||"",status:x.kind==="expense"&&x.status==="pending"?"pending":"paid",category:String(x.category||"Outros"),classification:x.kind==="expense"&&x.classification==="fixed"?"fixed":x.kind==="expense"?"variable":"income",payment:String(x.payment||"Outro"),note:String(x.note||""),recurringId:x.recurringId||null,createdAt:x.createdAt||new Date().toISOString()};
-  });
-  if(!confirm("Importar "+clean.length+" lançamentos? Isso substituirá todos os lançamentos atuais. Os limites e modelos recorrentes não serão alterados."))return;
-  const tx=db.transaction("items","readwrite"),store=tx.objectStore("items");store.clear();clean.forEach(x=>store.add(x));
-  await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});
-  items=await getAll("items");await render();$("status").textContent="Backup importado com sucesso.";toast("Backup restaurado!");
- }catch(e){$("status").textContent="Não foi possível importar o arquivo.";toast("Arquivo de backup inválido.");}
+  const raw=JSON.parse(await file.text());
+  if(!raw||raw.app!=="Meu Controle")throw new Error("Este arquivo não é um backup do Meu Controle.");
+  const isFull=raw.formatVersion===2&&raw.data&&Array.isArray(raw.data.transactions);
+  const isLegacy=Array.isArray(raw.transactions);
+  if(!isFull&&!isLegacy)throw new Error("Formato de backup não reconhecido.");
+  const source=isFull?raw.data:{transactions:raw.transactions};
+  const clean={
+   transactions:cleanBackupTransactions(source.transactions)
+  };
+  if(isFull){
+   clean.recurring=cleanBackupRecurring(source.recurring||[]);
+   clean.budgets=cleanBackupBudgets(source.budgets||[]);
+   clean.goals=cleanBackupGoals(source.goals||[]);
+   clean.customCategories=cleanBackupCategories(source.customCategories);
+   clean.favorites=cleanBackupFavorites(source.favorites);
+   clean.monthlyClosures=cleanBackupClosures(source.monthlyClosures);
+  }
+  const description=isFull?
+   "O backup contém "+clean.transactions.length+" lançamento(s), "+clean.recurring.length+" recorrência(s), "+clean.budgets.length+" orçamento(s), "+clean.goals.length+" meta(s), categorias, favoritos e fechamentos.":
+   "Este é um backup antigo e contém somente "+clean.transactions.length+" lançamento(s). Metas, orçamentos e configurações atuais serão preservados.";
+  if(!confirm(description+"\n\n"+(isFull?"A restauração substituirá os dados financeiros e as configurações incluídas neste arquivo.":"A restauração substituirá somente os lançamentos atuais.")+"\n\nSeu login e sua senha local serão preservados. Deseja continuar?"))return;
+  if(isFull){
+   const names=["items","recurring","budgets","goals","settings"];
+   tx=db.transaction(names,"readwrite");
+   const done=waitForTransaction(tx);
+   const itemsStore=tx.objectStore("items"),recurringStore=tx.objectStore("recurring"),budgetsStore=tx.objectStore("budgets"),goalsStore=tx.objectStore("goals"),settingsStore=tx.objectStore("settings");
+   itemsStore.clear();recurringStore.clear();budgetsStore.clear();goalsStore.clear();
+   ["customCategories","favorites","monthlyClosures"].forEach(key=>settingsStore.delete(key));
+   clean.transactions.forEach(x=>itemsStore.add(x));
+   clean.recurring.forEach(x=>recurringStore.add(x));
+   clean.budgets.forEach(x=>budgetsStore.add(x));
+   clean.goals.forEach(x=>goalsStore.add(x));
+   settingsStore.put({key:"customCategories",value:clean.customCategories});
+   settingsStore.put({key:"favorites",value:clean.favorites});
+   settingsStore.put({key:"monthlyClosures",value:clean.monthlyClosures});
+   await done;
+  }else{
+   tx=db.transaction("items","readwrite");
+   const done=waitForTransaction(tx),store=tx.objectStore("items");
+   store.clear();clean.transactions.forEach(x=>store.add(x));
+   await done;
+  }
+  await refreshData();
+  await render();
+  renderAll();
+  $("status").textContent=isFull?"Backup completo restaurado com sucesso. Seu login local foi preservado.":"Backup antigo restaurado. Somente os lançamentos foram substituídos.";
+  toast(isFull?"Backup completo restaurado!":"Lançamentos restaurados!");
+ }catch(e){
+  $("status").textContent=e?.message||"Não foi possível importar o arquivo.";
+  toast("Não foi possível restaurar o backup. Nenhum dado válido foi importado.");
+ }
 }
 
 /* Login local: PBKDF2 + SHA-256; a senha nunca é armazenada em texto puro. */
