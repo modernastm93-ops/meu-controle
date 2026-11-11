@@ -858,20 +858,51 @@ async function prepareAuth(){
  $("password").value="";$("confirmPassword").value="";$("authError").textContent="";
 }
 async function submitAuth(e){
- e.preventDefault();const password=$("password").value;
+ e.preventDefault();
+ const password=$("password").value;
+ const submitButton=$("authForm").querySelector('button[type="submit"]');
+ if(submitButton.disabled)return;
  if(password.length<8){$("authError").textContent="Use uma senha com pelo menos 8 caracteres.";return}
+ submitButton.disabled=true;
+ submitButton.textContent="Verificando...";
+ $("authError").textContent="";
  try{
+  if(!window.isSecureContext||!window.crypto||!crypto.subtle){
+   throw new Error("O navegador não disponibilizou a criptografia necessária. Abra o aplicativo pelo endereço HTTPS no Safari ou Chrome.");
+  }
   if(firstAccess){
    if(!$("profileName").value.trim()){$("authError").textContent="Informe seu nome.";return}
    if(password!==$("confirmPassword").value){$("authError").textContent="As senhas não coincidem.";return}
-   const salt=crypto.getRandomValues(new Uint8Array(16)),hash=await hashPassword(password,salt);
+   const salt=crypto.getRandomValues(new Uint8Array(16));
+   const hash=await hashPassword(password,salt);
    await putRecord("settings",{key:"localAuth",value:{name:$("profileName").value.trim(),salt:toBase64(salt),hash,createdAt:new Date().toISOString()}});
+   firstAccess=false;
+   $("authTitle").textContent="Acesso criado";
+   $("authMessage").textContent="Acesso configurado. Carregando seus dados...";
+   $("nameWrap").hidden=true;
+   $("confirmWrap").hidden=true;
+   $("profileName").required=false;
+   $("confirmPassword").required=false;
   }else{
-   const saved=await getSetting("localAuth"),hash=await hashPassword(password,fromBase64(saved.salt));
+   const saved=await getSetting("localAuth");
+   if(!saved||!saved.salt||!saved.hash){
+    throw new Error("O registro de acesso local não foi encontrado ou está incompleto. Não apague os dados do navegador; precisamos recuperar o acesso sem perder seus lançamentos.");
+   }
+   const hash=await hashPassword(password,fromBase64(saved.salt));
    if(hash!==saved.hash){$("authError").textContent="Senha incorreta. Tente novamente.";return}
   }
-  $("authOverlay").hidden=true;document.body.classList.remove("locked");$("password").value="";await refreshData();await render();
- }catch(err){$("authError").textContent="Não foi possível validar o acesso neste navegador. Abra o app pelo endereço HTTPS e tente novamente."}
+  await refreshData();
+  await render();
+  $("authOverlay").hidden=true;
+  document.body.classList.remove("locked");
+  $("password").value="";
+ }catch(err){
+  console.error("Falha ao entrar no Meu Controle:",err);
+  $("authError").textContent=err?.message||"Não foi possível abrir o aplicativo. Seus dados não foram apagados.";
+ }finally{
+  submitButton.disabled=false;
+  submitButton.textContent="Continuar";
+ }
 }
 function lockApp(){document.body.classList.add("locked");$("authOverlay").hidden=false;firstAccess=false;$("authTitle").textContent="Acessar Meu Controle";$("authMessage").textContent="Digite sua senha para continuar.";$("nameWrap").hidden=true;$("confirmWrap").hidden=true;$("profileName").required=false;$("confirmPassword").required=false;$("password").value="";$("authError").textContent="";}
 
@@ -966,7 +997,16 @@ document.addEventListener("click",async e=>{
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPrompt=e;$("install").hidden=false});
 $("install").addEventListener("click",async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null}else toast("No iPhone: Safari > Compartilhar > Adicionar à Tela de Início")});
 (async()=>{
- try{db=await openDB();await refreshData();await prepareAuth();}
- catch(err){document.body.classList.add("locked");$("authError").textContent="Não foi possível abrir o banco local do aplicativo."}
- if("serviceWorker"in navigator&&location.protocol!=="file:")navigator.serviceWorker.register("./sw.js").catch(()=>{});
+ try{
+  db=await openDB();
+  await prepareAuth();
+ }catch(err){
+  console.error("Falha ao inicializar o Meu Controle:",err);
+  document.body.classList.add("locked");
+  $("authOverlay").hidden=false;
+  $("authError").textContent=err?.message||"Não foi possível abrir o banco local do aplicativo. Seus dados não foram apagados.";
+ }
+ if("serviceWorker"in navigator&&location.protocol!=="file:"){
+  navigator.serviceWorker.register("./sw.js").catch(err=>console.error("Falha ao atualizar o aplicativo:",err));
+ }
 })();
