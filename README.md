@@ -64,3 +64,10 @@ https://modernastm93-ops.github.io/meu-controle/
 - No celular, os cartões principais ficam em uma coluna com respiro entre blocos; os dois indicadores de gastos ficam lado a lado em telas comuns e empilhados em telas estreitas.
 - Em telas maiores, resumo, disponibilidade, alertas e indicadores são organizados em duas colunas com o gráfico ocupando a largura total.
 - Tipografia, hierarquia de valores, cartões e seletor de período receberam refinamento visual.
+
+## Preparação para uso diário — v2.2
+- Backup completo JSON de lançamentos, despesas recorrentes, orçamentos, metas, categorias personalizadas, favoritos e fechamentos mensais.
+- Restauração validada antes de substituir dados; a importação é aplicada em uma única transação IndexedDB.
+- Backups antigos da versão 1, que contêm somente lançamentos, continuam aceitos e preservam as demais informações que já existem no dispositivo.
+- O login local não é exportado. A senha atual do dispositivo é preservada ao restaurar um backup.
+- Os dados continuam locais neste navegador/dispositivo. Não há sincronização automática entre aparelhos; exporte e guarde backups em local seguro regularmente.
