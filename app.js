@@ -11,10 +11,11 @@ const today=()=>{
  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 };
 const thisMonth=()=>today().slice(0,7);
-let db,items=[],recurrings=[],budgets=[],goals=[],customCategories={expense:[],income:[]},favorites=[],monthlyClosures=[],month=thisMonth(),installPrompt=null,firstAccess=false;
+let db,dbOpening=null,items=[],recurrings=[],budgets=[],goals=[],customCategories={expense:[],income:[]},favorites=[],monthlyClosures=[],month=thisMonth(),installPrompt=null,firstAccess=false;
 
 function openDB(){
  return new Promise((resolve,reject)=>{
+  let settled=false;
   const req=indexedDB.open(DB,DB_VERSION);
   req.onupgradeneeded=()=>{
    const d=req.result;
@@ -24,20 +25,94 @@ function openDB(){
    if(!d.objectStoreNames.contains("settings"))d.createObjectStore("settings",{keyPath:"key"});
    if(!d.objectStoreNames.contains("goals"))d.createObjectStore("goals",{keyPath:"id",autoIncrement:true});
   };
-  req.onsuccess=()=>{req.result.onversionchange=()=>req.result.close();resolve(req.result)};req.onerror=()=>reject(req.error);
+  req.onblocked=()=>reject(new Error("O banco está sendo atualizado em outra aba. Feche outras abas do Meu Controle e tente novamente."));
+  req.onsuccess=()=>{
+   settled=true;
+   const connection=req.result;
+   connection.onversionchange=()=>{
+    if(db===connection)db=null;
+    try{connection.close()}catch{}
+   };
+   connection.onclose=()=>{if(db===connection)db=null};
+   resolve(connection);
+  };
+  req.onerror=()=>{if(!settled)reject(req.error||new Error("Não foi possível abrir o banco local."))};
  });
 }
+async function ensureDB(){
+ if(db)return db;
+ if(!dbOpening){
+  dbOpening=openDB().then(connection=>{
+   db=connection;
+   return connection;
+  }).finally(()=>{dbOpening=null});
+ }
+ return dbOpening;
+}
+function isClosingConnectionError(error){
+ return error?.name==="InvalidStateError"||/database connection is closing|connection is closing|database is closing/i.test(error?.message||"");
+}
+async function withDBTransaction(stores,mode,work){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const connection=await ensureDB();
+  try{
+   const tx=connection.transaction(stores,mode);
+   try{return await work(tx)}
+   catch(error){
+    lastError=error;
+    if(attempt===0&&isClosingConnectionError(error)){
+     if(db===connection)db=null;
+     try{connection.close()}catch{}
+     continue;
+    }
+    throw error;
+   }
+  }catch(error){
+   lastError=error;
+   if(attempt===0&&isClosingConnectionError(error)){
+    if(db===connection)db=null;
+    try{connection.close()}catch{}
+    continue;
+   }
+   throw error;
+  }
+ }
+ throw lastError||new Error("Não foi possível acessar o banco local.");
+}
 function getAll(store){
- return new Promise((resolve,reject)=>{const r=db.transaction(store).objectStore(store).getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+ return withDBTransaction(store,"readonly",tx=>new Promise((resolve,reject)=>{
+  const request=tx.objectStore(store).getAll();
+  request.onsuccess=()=>resolve(request.result);
+  request.onerror=()=>reject(request.error||new Error("Falha ao consultar os dados."));
+  tx.onabort=()=>reject(tx.error||new Error("A consulta ao banco foi interrompida."));
+ }));
 }
 function putRecord(store,value){
- return new Promise((resolve,reject)=>{const r=db.transaction(store,"readwrite").objectStore(store).put(value);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+ return withDBTransaction(store,"readwrite",tx=>new Promise((resolve,reject)=>{
+  let result;
+  tx.oncomplete=()=>resolve(result);
+  tx.onabort=()=>reject(tx.error||new Error("Falha ao salvar os dados."));
+  const request=tx.objectStore(store).put(value);
+  request.onsuccess=()=>{result=request.result};
+  request.onerror=()=>reject(request.error||new Error("Falha ao salvar os dados."));
+ }));
 }
 function deleteRecord(store,id){
- return new Promise((resolve,reject)=>{const r=db.transaction(store,"readwrite").objectStore(store).delete(store==="items"||store==="recurring"||store==="goals"?Number(id):id);r.onsuccess=resolve;r.onerror=()=>reject(r.error)});
+ return withDBTransaction(store,"readwrite",tx=>new Promise((resolve,reject)=>{
+  tx.oncomplete=()=>resolve();
+  tx.onabort=()=>reject(tx.error||new Error("Falha ao excluir o registro."));
+  const request=tx.objectStore(store).delete(store==="items"||store==="recurring"||store==="goals"?Number(id):id);
+  request.onerror=()=>reject(request.error||new Error("Falha ao excluir o registro."));
+ }));
 }
 function getSetting(key){
- return new Promise((resolve,reject)=>{const r=db.transaction("settings").objectStore("settings").get(key);r.onsuccess=()=>resolve(r.result?.value);r.onerror=()=>reject(r.error)});
+ return withDBTransaction("settings","readonly",tx=>new Promise((resolve,reject)=>{
+  const request=tx.objectStore("settings").get(key);
+  request.onsuccess=()=>resolve(request.result?.value);
+  request.onerror=()=>reject(request.error||new Error("Falha ao consultar as configurações."));
+  tx.onabort=()=>reject(tx.error||new Error("A consulta às configurações foi interrompida."));
+ }));
 }
 async function refreshData(){items=await getAll("items");recurrings=await getAll("recurring");budgets=await getAll("budgets");goals=await getAll("goals");customCategories=(await getSetting("customCategories"))||{expense:[],income:[]};favorites=(await getSetting("favorites"))||[];monthlyClosures=(await getSetting("monthlyClosures"))||[]}
 function safe(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
@@ -810,24 +885,26 @@ async function importBackup(file){
   if(!confirm(description+"\n\n"+(isFull?"A restauração substituirá os dados financeiros e as configurações incluídas neste arquivo.":"A restauração substituirá somente os lançamentos atuais.")+"\n\nSeu login e sua senha local serão preservados. Deseja continuar?"))return;
   if(isFull){
    const names=["items","recurring","budgets","goals","settings"];
-   tx=db.transaction(names,"readwrite");
-   const done=waitForTransaction(tx);
-   const itemsStore=tx.objectStore("items"),recurringStore=tx.objectStore("recurring"),budgetsStore=tx.objectStore("budgets"),goalsStore=tx.objectStore("goals"),settingsStore=tx.objectStore("settings");
-   itemsStore.clear();recurringStore.clear();budgetsStore.clear();goalsStore.clear();
-   ["customCategories","favorites","monthlyClosures"].forEach(key=>settingsStore.delete(key));
-   clean.transactions.forEach(x=>itemsStore.add(x));
-   clean.recurring.forEach(x=>recurringStore.add(x));
-   clean.budgets.forEach(x=>budgetsStore.add(x));
-   clean.goals.forEach(x=>goalsStore.add(x));
-   settingsStore.put({key:"customCategories",value:clean.customCategories});
-   settingsStore.put({key:"favorites",value:clean.favorites});
-   settingsStore.put({key:"monthlyClosures",value:clean.monthlyClosures});
-   await done;
+   await withDBTransaction(names,"readwrite",tx=>{
+    const done=waitForTransaction(tx);
+    const itemsStore=tx.objectStore("items"),recurringStore=tx.objectStore("recurring"),budgetsStore=tx.objectStore("budgets"),goalsStore=tx.objectStore("goals"),settingsStore=tx.objectStore("settings");
+    itemsStore.clear();recurringStore.clear();budgetsStore.clear();goalsStore.clear();
+    ["customCategories","favorites","monthlyClosures"].forEach(key=>settingsStore.delete(key));
+    clean.transactions.forEach(x=>itemsStore.add(x));
+    clean.recurring.forEach(x=>recurringStore.add(x));
+    clean.budgets.forEach(x=>budgetsStore.add(x));
+    clean.goals.forEach(x=>goalsStore.add(x));
+    settingsStore.put({key:"customCategories",value:clean.customCategories});
+    settingsStore.put({key:"favorites",value:clean.favorites});
+    settingsStore.put({key:"monthlyClosures",value:clean.monthlyClosures});
+    return done;
+   });
   }else{
-   tx=db.transaction("items","readwrite");
-   const done=waitForTransaction(tx),store=tx.objectStore("items");
-   store.clear();clean.transactions.forEach(x=>store.add(x));
-   await done;
+   await withDBTransaction("items","readwrite",tx=>{
+    const done=waitForTransaction(tx),store=tx.objectStore("items");
+    store.clear();clean.transactions.forEach(x=>store.add(x));
+    return done;
+   });
   }
   await refreshData();
   await render();
@@ -998,7 +1075,7 @@ window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installProm
 $("install").addEventListener("click",async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null}else toast("No iPhone: Safari > Compartilhar > Adicionar à Tela de Início")});
 (async()=>{
  try{
-  db=await openDB();
+  await ensureDB();
   await prepareAuth();
  }catch(err){
   console.error("Falha ao inicializar o Meu Controle:",err);
